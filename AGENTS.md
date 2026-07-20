@@ -175,7 +175,7 @@ Following the lighterbird pattern, ronzzdoi operations are accessible through mu
 | Auth | `docs/AGENTS-auth.md` | `docs/man/auth.md` |
 | CLI | `docs/AGENTS-cli.md` | `docs/man/cli.md` |
 
-(Update this table as new modules are added)
+Current status: DB module ✓ (implemented). Other modules are placeholders.
 
 ---
 

@@ -34,7 +34,7 @@ dist/
 build/
 junit-*.xml
 
-# opencode plugin artifacts (not the config)
+# opencode plugin artifacts (not user config)
 .opencode/
 
 # Coverage
