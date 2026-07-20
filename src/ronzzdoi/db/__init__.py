@@ -13,6 +13,8 @@ Usage::
 
 from __future__ import annotations
 
+import sqlite3
+
 from lightercore.db import LighterDB
 from lightercore.paths import data_dir, ensure_dirs, set_app_name
 
@@ -29,11 +31,27 @@ __all__ = [
 ]
 
 
+def _after_connect(conn: sqlite3.Connection) -> None:
+    """Load sqlite-vec extension via lightersearch (if available).
+
+    Called once per thread by :class:`LighterDB` on first connection.
+    """
+    try:
+        from lightersearch.vec import load
+
+        load(conn)
+    except ImportError:
+        pass
+
+
 def init_db(app_name: str = "ronzzdoi") -> tuple[LighterDB, DOIService, CitationService, RedirectService]:
     """Initialize the database, apply migrations, and return service instances.
 
     Call this once at application startup.  Idempotent — subsequent calls
     return the same service instances (singleton via ``get_db``).
+
+    If ``lightersearch`` is installed, sqlite-vec is loaded on each new
+    connection and the ``vec_dois`` table is created automatically.
 
     Args:
         app_name: Application name for XDG path resolution.
@@ -46,14 +64,26 @@ def init_db(app_name: str = "ronzzdoi") -> tuple[LighterDB, DOIService, Citation
     ensure_dirs()
 
     db_path = data_dir() / "ronzzdoi.db"
-    db = LighterDB(db_path)
+    db = LighterDB(db_path, after_connect=_after_connect)
     db.migrate(MIGRATIONS)
+
+    _ensure_vec_table(db)
 
     doi_svc = DOIService(db)
     cit_svc = CitationService(db)
     red_svc = RedirectService(db)
 
     return db, doi_svc, cit_svc, red_svc
+
+
+def _ensure_vec_table(db: LighterDB) -> None:
+    """Create the ``vec_dois`` table if lightersearch is available."""
+    try:
+        from lightersearch.vec import ensure_vec_table
+
+        ensure_vec_table(db)
+    except ImportError:
+        pass
 
 
 _db_state: dict[str, tuple[LighterDB, DOIService, CitationService, RedirectService]] = {}
