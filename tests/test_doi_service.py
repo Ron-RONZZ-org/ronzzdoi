@@ -11,7 +11,7 @@ import re
 
 import pytest
 
-from ronzzdoi.doi.constants import DOI_PATTERN
+from ronzzdoi.doi.constants import DOI_PATTERN, is_valid_doi, is_doi_prefix
 from ronzzdoi.doi.exceptions import DOIAmbiguousError, DOINotFoundError
 from ronzzdoi.doi.service import DOIService
 
@@ -51,10 +51,10 @@ DOI_FORMAT_RE = re.compile(r"^10\.ronzz/[0-9a-f]{32}$")
 @pytest.fixture
 def db(tmp_path):
     """Create a temporary SQLite database with DOI schema."""
-    from lightercore.db import LighterbirdDB
+    from lightercore.db import LighterDB
 
     db_path = tmp_path / "test_ronzzdoi.db"
-    ldb = LighterbirdDB(db_path)
+    ldb = LighterDB(db_path)
     ldb.init_schema(DOI_SCHEMA)
     yield ldb
     ldb.close()
@@ -449,3 +449,85 @@ class TestEdgeCases:
         assert resolved["creator"] == "Alice"
         assert resolved["doi_type"] == "report"
         assert resolved["metadata"] == {"version": 1}
+
+
+# ── Constants/validators (do not need the DB) ──────────────────────────────
+
+
+class TestDOIValidators:
+    """Tests for is_valid_doi() and is_doi_prefix() in constants.py."""
+
+    def test_is_valid_doi_accepts_proper_format(self):
+        """Valid DOI returns True."""
+        assert is_valid_doi("10.ronzz/0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d") is True
+
+    def test_is_valid_doi_rejects_wrong_prefix(self):
+        """Wrong registrant prefix returns False."""
+        assert is_valid_doi("10.wrong/0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d") is False
+
+    def test_is_valid_doi_rejects_short_suffix(self):
+        """Too-short suffix returns False."""
+        assert is_valid_doi("10.ronzz/abc123") is False
+
+    def test_is_valid_doi_rejects_garbage(self):
+        """Garbage string returns False."""
+        assert is_valid_doi("not-a-doi") is False
+        assert is_valid_doi("") is False
+
+    def test_is_valid_doi_rejects_uppercase(self):
+        """Uppercase hex in suffix returns False (must be lowercase)."""
+        assert is_valid_doi("10.ronzz/0A1B2C3D4E5F6A7B8C9D0E1F2A3B4C5D") is False
+
+    def test_is_doi_prefix_accepts_full_prefix(self):
+        """Full prefix '10.ronzz/' returns True."""
+        assert is_doi_prefix("10.ronzz/") is True
+
+    def test_is_doi_prefix_accepts_prefix_with_suffix(self):
+        """Prefix with partial suffix returns True."""
+        assert is_doi_prefix("10.ronzz/abc123") is True
+
+    def test_is_doi_prefix_rejects_wrong_prefix(self):
+        """Wrong prefix returns False."""
+        assert is_doi_prefix("10.wrong/") is False
+
+    def test_is_doi_prefix_rejects_no_slash(self):
+        """String without slash returns False."""
+        assert is_doi_prefix("10.ronzz") is False
+
+    def test_is_doi_prefix_rejects_garbage(self):
+        """Garbage string returns False."""
+        assert is_doi_prefix("nope") is False
+
+
+# ── Edge cases for service methods ─────────────────────────────────────────
+
+
+class TestAdditionalEdgeCases:
+    """Additional edge cases discovered during test coverage audit."""
+
+    def test_resolve_no_redirects(self, svc):
+        """resolve() with include_redirects=False skips redirect history fetch."""
+        created = svc.assign("https://example.com")
+        resolved = svc.resolve(created["doi"], include_redirects=False)
+        assert resolved["redirect_history"] == []
+
+    def test_modify_same_url_no_redirect(self, svc):
+        """Modify with same target_url does NOT create a redirect record."""
+        created = svc.assign("https://example.com")
+        svc.modify(created["doi"], target_url="https://example.com")
+        redirects = svc._get_redirect_history(created["doi"])
+        assert len(redirects) == 0
+
+    def test_modify_partial_update_preserves_other_fields(self, svc):
+        """Modifying only one field preserves all others."""
+        created = svc.assign(
+            "https://example.com",
+            title="Original",
+            creator="Alice",
+            doi_type="book",
+        )
+        svc.modify(created["doi"], title="Updated")
+        resolved = svc.resolve(created["doi"])
+        assert resolved["title"] == "Updated"
+        assert resolved["creator"] == "Alice"  # unchanged
+        assert resolved["doi_type"] == "book"  # unchanged

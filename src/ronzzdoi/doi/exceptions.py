@@ -1,7 +1,7 @@
 """DOI-specific exception hierarchy.
 
 All exceptions inherit from :class:`DOIError`, which itself inherits from
-:class:`lightercore.exceptions.LighterbirdError` so that client code can
+:class:`lightercore.exceptions.LighterError` so that client code can
 catch a single base class for all domain errors in the lighter ecosystem.
 
 Usage::
@@ -18,10 +18,10 @@ Usage::
 
 from __future__ import annotations
 
-from lightercore.exceptions import AmbiguousIDError, LighterbirdError
+from lightercore.exceptions import AmbiguousIDError, LighterError
 
 
-class DOIError(LighterbirdError):
+class DOIError(LighterError):
     """Base exception for all DOI-related errors."""
 
 
