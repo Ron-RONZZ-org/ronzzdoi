@@ -198,15 +198,21 @@ class DOIService(CRUDService):
         if not text.strip():
             return
 
+        # Fetch the SQLite rowid (not returned by SELECT *)
+        row = self.db.execute_one(
+            f"SELECT rowid FROM {self.table} WHERE {self._pk_column} = ?",
+            (doi,),
+        )
+        if not row:
+            return
+
         try:
             from lightersearch.embed import embed_single, vector_to_bytes
             from lightersearch.vec import insert_vector
 
             vec = embed_single(text)
             vec_bytes = vector_to_bytes(vec)
-            # rowid matches the dois table's rowid
-            rowid = doi_entry["rowid"]
-            insert_vector(self.db, rowid=rowid, vector=vec_bytes)
+            insert_vector(self.db, rowid=row["rowid"], vector=vec_bytes)
         except Exception:
             import logging
 
@@ -219,14 +225,17 @@ class DOIService(CRUDService):
 
         Failures are logged at WARNING level (not raised).
         """
-        doi_entry = self.get(doi)
-        if not doi_entry:
+        row = self.db.execute_one(
+            f"SELECT rowid FROM {self.table} WHERE {self._pk_column} = ?",
+            (doi,),
+        )
+        if not row:
             return
 
         try:
             from lightersearch.vec import delete_vector
 
-            delete_vector(self.db, rowid=doi_entry["rowid"])
+            delete_vector(self.db, rowid=row["rowid"])
         except Exception:
             import logging
 

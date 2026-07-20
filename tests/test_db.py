@@ -341,3 +341,277 @@ class TestConstraints:
                 "VALUES (?, ?, ?, datetime('now'), datetime('now'))",
                 ("10.ronzz/test/badjson", "https://x.com", "not-json"),
             )
+
+
+# ── Lightersearch wiring tests ───────────────────────────────────────
+
+
+class TestLightersearchWiring:
+    """Tests for the lightersearch integration in DOIService.
+
+    These tests verify that DOIService correctly probes, calls into,
+    and falls back from lightersearch.  They use mocking to avoid
+    requiring a full sqlite-vec + fastembed stack.
+    """
+
+    def test_probe_detects_lightersearch(self, db, mocker):
+        """_probe_lightersearch sets _vec_available=True when lightersearch responds."""
+        mock_available = mocker.patch("lightersearch.vec.available", return_value=True)
+        svc = DOIService(db)
+        assert svc._vec_available is True
+        mock_available.assert_called_once_with(db)
+
+    def test_probe_false_when_lightersearch_unavailable(self, db, mocker):
+        """_probe_lightersearch sets _vec_available=False when lightersearch is missing."""
+        mocker.patch("lightersearch.vec.available", side_effect=ImportError("no module"))
+        svc = DOIService(db)
+        assert svc._vec_available is False
+
+    def test_probe_false_when_vec_not_loaded(self, db, mocker):
+        """_probe_lightersearch sets _vec_available=False when vec.available returns False."""
+        mocker.patch("lightersearch.vec.available", return_value=False)
+        svc = DOIService(db)
+        assert svc._vec_available is False
+
+    def test_sync_embedding_calls_embed_and_insert(self, db, mocker):
+        """_sync_embedding generates embedding and inserts into vec0 table."""
+        # Create DOI first WITHOUT vec enabled (to avoid _post_create triggering)
+        mocker.patch("lightersearch.vec.available", return_value=False)
+        svc = DOIService(db)
+        svc.create({
+            "doi": "10.ronzz/test/sync",
+            "target_url": "https://example.com",
+            "title": "Test Title",
+            "creator": "Test Creator",
+        })
+
+        # Now enable vec and set up mocks for the sync call
+        svc._vec_available = True
+        mock_embed = mocker.patch("lightersearch.embed.embed_single")
+        mock_embed.return_value = __import__("numpy").array([0.1] * 384, dtype="float32")
+
+        mock_to_bytes = mocker.patch("lightersearch.embed.vector_to_bytes")
+        mock_to_bytes.return_value = b"fakevec"
+
+        mock_insert = mocker.patch("lightersearch.vec.insert_vector")
+        mock_insert.return_value = True
+
+        svc._sync_embedding("10.ronzz/test/sync")
+
+        # Should have been called with the title+creator+metadata text
+        call_text = mock_embed.call_args[0][0]
+        assert "Test Title" in call_text
+        assert "Test Creator" in call_text
+
+        mock_insert.assert_called_once()
+        assert mock_insert.call_args[1]["vector"] == b"fakevec"
+
+    def test_sync_embedding_noop_for_missing_doi(self, db, mocker):
+        """_sync_embedding does nothing for a non-existent DOI."""
+        mocker.patch("lightersearch.vec.available", return_value=True)
+        svc = DOIService(db)
+        svc._vec_available = True
+
+        mock_embed = mocker.patch("lightersearch.embed.embed_single")
+        svc._sync_embedding("10.ronzz/doesnotexist")
+        mock_embed.assert_not_called()
+
+    def test_sync_embedding_logs_on_failure(self, db, mocker):
+        """_sync_embedding logs warning on failure, does not raise."""
+        mocker.patch("lightersearch.vec.available", return_value=True)
+        svc = DOIService(db)
+        svc._vec_available = True
+
+        svc.create({
+            "doi": "10.ronzz/test/fail",
+            "target_url": "https://example.com",
+            "title": "Test",
+        })
+
+        mocker.patch("lightersearch.embed.embed_single", side_effect=RuntimeError("model fail"))
+        mock_log = mocker.patch("logging.Logger.warning")
+
+        # Should not raise
+        svc._sync_embedding("10.ronzz/test/fail")
+        mock_log.assert_called()
+
+    def test_remove_embedding_calls_delete(self, db, mocker):
+        """_remove_embedding calls delete_vector."""
+        # Create DOI first WITHOUT vec enabled
+        mocker.patch("lightersearch.vec.available", return_value=False)
+        svc = DOIService(db)
+        svc.create({
+            "doi": "10.ronzz/test/rm",
+            "target_url": "https://example.com",
+        })
+
+        # Now enable vec and set up mocks
+        svc._vec_available = True
+        mock_delete = mocker.patch("lightersearch.vec.delete_vector")
+        svc._remove_embedding("10.ronzz/test/rm")
+        mock_delete.assert_called_once()
+
+    def test_remove_embedding_noop_for_missing_doi(self, db, mocker):
+        """_remove_embedding does nothing for a non-existent DOI."""
+        mocker.patch("lightersearch.vec.available", return_value=True)
+        svc = DOIService(db)
+        svc._vec_available = True
+
+        mock_delete = mocker.patch("lightersearch.vec.delete_vector")
+        svc._remove_embedding("10.ronzz/doesnotexist")
+        mock_delete.assert_not_called()
+
+    def test_search_semantic_delegates_to_lightersearch(self, db, mocker):
+        """_search_semantic calls lightersearch.search.search_dois when available."""
+        mocker.patch("lightersearch.vec.available", return_value=True)
+        svc = DOIService(db)
+        svc._vec_available = True
+
+        mock_search = mocker.patch("lightersearch.search.search_dois")
+        mock_search.return_value = [{"doi": "10.ronzz/result"}]
+
+        results = svc._search_semantic("machine learning", limit=5)
+        assert len(results) == 1
+        assert results[0]["doi"] == "10.ronzz/result"
+        mock_search.assert_called_once_with(db, "machine learning", limit=5)
+
+    def test_search_semantic_returns_empty_on_error(self, db, mocker):
+        """_search_semantic returns empty list when lightersearch.search fails."""
+        mocker.patch("lightersearch.vec.available", return_value=True)
+        svc = DOIService(db)
+        svc._vec_available = True
+
+        mocker.patch("lightersearch.search.search_dois", side_effect=RuntimeError("search fail"))
+        results = svc._search_semantic("test")
+        assert results == []
+
+    def test_search_semantic_fallback_when_vec_not_available(self, db, mocker):
+        """search(mode='semantic') falls back to FTS5 when vec not available."""
+        mocker.patch("lightersearch.vec.available", return_value=False)
+        svc = DOIService(db)
+
+        svc.create({
+            "doi": "10.ronzz/test/fallback",
+            "target_url": "https://example.com",
+            "title": "Python Programming",
+        })
+
+        # vec not available → should use FTS5
+        mock_fts = mocker.spy(svc, "search_fts")
+        results = svc.search("python", mode="semantic")
+        assert len(results) >= 1
+        mock_fts.assert_called_once()
+
+    def test_post_create_triggers_sync(self, db, mocker):
+        """_post_create calls _sync_embedding when vec is available."""
+        mocker.patch("lightersearch.vec.available", return_value=True)
+        svc = DOIService(db)
+        svc._vec_available = True
+
+        mock_sync = mocker.patch.object(svc, "_sync_embedding")
+        svc._post_create(
+            {"doi": "10.ronzz/test/pc"},
+            {"doi": "10.ronzz/test/pc"},
+        )
+        mock_sync.assert_called_once_with("10.ronzz/test/pc")
+
+    def test_post_update_triggers_sync(self, db, mocker):
+        """_post_update calls _sync_embedding when vec is available."""
+        mocker.patch("lightersearch.vec.available", return_value=True)
+        svc = DOIService(db)
+        svc._vec_available = True
+
+        mock_sync = mocker.patch.object(svc, "_sync_embedding")
+        svc._post_update("10.ronzz/test/pu", None, {})
+        mock_sync.assert_called_once_with("10.ronzz/test/pu")
+
+    def test_post_delete_triggers_remove(self, db, mocker):
+        """_post_delete calls _remove_embedding when vec is available."""
+        mocker.patch("lightersearch.vec.available", return_value=True)
+        svc = DOIService(db)
+        svc._vec_available = True
+
+        mock_remove = mocker.patch.object(svc, "_remove_embedding")
+        svc._post_delete("10.ronzz/test/pd", None)
+        mock_remove.assert_called_once_with("10.ronzz/test/pd")
+
+    def test_post_hooks_noop_without_vec(self, db, mocker):
+        """Post hooks do nothing when vec is not available."""
+        mocker.patch("lightersearch.vec.available", return_value=False)
+        svc = DOIService(db)
+        assert svc._vec_available is False
+
+        mock_sync = mocker.patch.object(svc, "_sync_embedding")
+        mock_rm = mocker.patch.object(svc, "_remove_embedding")
+
+        svc._post_create({"doi": "x"}, {"doi": "x"})
+        svc._post_update("x", None, {})
+        svc._post_delete("x", None)
+
+        mock_sync.assert_not_called()
+        mock_rm.assert_not_called()
+
+
+# ── init_db() integration test ───────────────────────────────────────
+
+
+class TestInitDB:
+    def test_init_db_creates_database(self, tmp_path, mocker):
+        """init_db() creates a database file and returns all services."""
+        # Mock paths to use tmpdir
+        mock_data_dir = tmp_path / "data"
+        mock_data_dir.mkdir()
+        mocker.patch("ronzzdoi.db.data_dir", return_value=mock_data_dir)
+        mocker.patch("ronzzdoi.db.ensure_dirs")
+        mocker.patch("ronzzdoi.db.set_app_name")
+
+        from ronzzdoi.db import init_db
+
+        db, doi_svc, cit_svc, red_svc = init_db("test_ronzzdoi")
+
+        assert (mock_data_dir / "ronzzdoi.db").exists()
+        assert db.table_exists("dois")
+        assert db.table_exists("citations")
+        assert db.table_exists("redirects")
+        assert isinstance(doi_svc, DOIService)
+        assert isinstance(cit_svc, CitationService)
+        assert isinstance(red_svc, RedirectService)
+
+    def test_init_db_creates_vec_table_when_lightersearch_available(self, tmp_path, mocker):
+        """init_db() creates vec_dois when lightersearch is installed."""
+        mock_data_dir = tmp_path / "data"
+        mock_data_dir.mkdir()
+        mocker.patch("ronzzdoi.db.data_dir", return_value=mock_data_dir)
+        mocker.patch("ronzzdoi.db.ensure_dirs")
+        mocker.patch("ronzzdoi.db.set_app_name")
+
+        # Ensure _after_connect runs (lightersearch is installed in this env)
+        from ronzzdoi.db import init_db
+
+        db, doi_svc, cit_svc, red_svc = init_db("test_ronzzdoi_vec")
+
+        # vec_dois should exist only if sqlite-vec extension loaded
+        from lightersearch.vec import available as vec_available
+
+        if vec_available(db):
+            assert db.table_exists("vec_dois")
+
+    def test_get_db_singleton(self, tmp_path, mocker):
+        """get_db() returns the same instances on second call."""
+        mock_data_dir = tmp_path / "data"
+        mock_data_dir.mkdir()
+        mocker.patch("ronzzdoi.db.data_dir", return_value=mock_data_dir)
+        mocker.patch("ronzzdoi.db.ensure_dirs")
+        mocker.patch("ronzzdoi.db.set_app_name")
+
+        from ronzzdoi.db import get_db, _db_state
+
+        _db_state.clear()
+
+        db1, doi1, cit1, red1 = get_db("test_singleton")
+        db2, doi2, cit2, red2 = get_db("test_singleton")
+
+        assert db1 is db2
+        assert doi1 is doi2
+        assert cit1 is cit2
+        assert red1 is red2
