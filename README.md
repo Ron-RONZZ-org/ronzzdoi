@@ -14,7 +14,8 @@ Part of the [lighter ecosystem](https://github.com/Ron-RONZZ-org).
 - **Citation management** — add citations for multiple document types (book, webpage, conference transcript, presentation, circulaire, rulebook, document, media file)
 - **Auto-generated detailed-view pages** — persistent citation landing pages
 - **Multi-style export** — APA, Vancouver, MLA, Chicago, BibTeX, JSON
-- **Keyword search** — search across DOI metadata and citations
+- **FTS5 full-text search** — search across DOI metadata via SQLite FTS5
+- **Semantic search** (v0.2.0) — vector search via sqlite-vec + fastembed (optional `lightersearch` dependency)
 - **CLI & Svelte 5 GUI** — dual interfaces following lighterbird patterns
 
 ## Planned (v0.2.0)
@@ -24,7 +25,7 @@ Part of the [lighter ecosystem](https://github.com/Ron-RONZZ-org).
 
 ## Architecture
 
-ronzzdoi extends [lightercore](https://github.com/Ron-RONZZ-org/lightercore) for shared infrastructure (database, paths, exceptions) and follows the interaction patterns established by [lighterbird](https://github.com/Ron-RONZZ-org/lighterbird).
+ronzzdoi extends [lightercore](https://github.com/Ron-RONZZ-org/lightercore) for shared infrastructure (`LighterDB`, `CRUDService`, paths, exceptions) and uses [lightersearch](https://github.com/Ron-RONZZ-org/lightersearch) for optional semantic search. Interaction patterns follow [lighterbird](https://github.com/Ron-RONZZ-org/lighterbird).
 
 ```
                     ┌─────────────┐

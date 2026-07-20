@@ -48,3 +48,4 @@ data/
 
 # uv
 uv.lock
+.serena/
