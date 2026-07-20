@@ -29,8 +29,10 @@ class DOIService(CRUDService):
     (no auto-generated UUID fallback) and ``get()`` to use exact match
     instead of prefix matching.
 
-    Provides ``search_fts()`` for FTS5 full-text search and optional
-    lightersearch integration via the ``_post_*`` hooks.
+    Provides ``search_fts()`` for FTS5 full-text search and
+    ``search_semantic()`` for vector search (via lightersearch, if
+    installed).  Embeddings are automatically synced on create/update
+    and removed on delete.
     """
 
     _vec_available: bool = False
@@ -43,15 +45,15 @@ class DOIService(CRUDService):
     # ── Lightersearch probe ────────────────────────────────────────────
 
     def _probe_lightersearch(self) -> None:
-        """Check if sqlite-vec is available for semantic search.
+        """Check if lightersearch is available for semantic search.
 
-        Sets ``self._vec_available`` so :meth:`search_semantic` can
+        Sets ``self._vec_available`` so :meth:`search` can
         decide at runtime whether to use vec0 or fall back to FTS5.
         """
         try:
-            import sqlite_vec  # noqa: F401
+            from lightersearch.vec import available as vec_available
 
-            self._vec_available = True
+            self._vec_available = vec_available(self.db)
         except ImportError:
             self._vec_available = False
 
@@ -128,24 +130,32 @@ class DOIService(CRUDService):
             List of DOI dicts matching the query.
         """
         if mode == "semantic" and self._vec_available:
-            return self._search_semantic(query, limit)
+            try:
+                return self._search_semantic(query, limit)
+            except Exception:
+                pass
         return self.search_fts(query, limit)
 
     def _search_semantic(
         self, query: str, limit: int = 20
     ) -> list[dict[str, Any]]:
-        """Semantic search via sqlite-vec (lightersearch).
+        """Semantic search via lightersearch.
 
-        Falls back to FTS5 if embedding generation fails.
+        Returns:
+            List of DOI dicts with ``_distance`` metadata, or empty
+            list if embedding generation fails.
         """
-        # Stub — full implementation requires lightersearch which is
-        # created as a separate repo.  For now, returns FTS5 results.
-        return self.search_fts(query, limit)
+        try:
+            from lightersearch.search import search_dois
+
+            return search_dois(self.db, query, limit=limit)
+        except (ImportError, Exception):
+            return []
 
     # ── Hooks for lightersearch ────────────────────────────────────────
 
     def _post_create(self, data: dict[str, Any], result: dict[str, Any]) -> None:
-        """Post-create hook — triggers embedding if lightersearch available."""
+        """Post-create hook — generates embedding if lightersearch available."""
         if self._vec_available:
             self._sync_embedding(result["doi"])
 
@@ -167,14 +177,62 @@ class DOIService(CRUDService):
     def _sync_embedding(self, doi: str) -> None:
         """Generate or update an embedding for *doi*.
 
-        No-op until lightersearch is available.
+        Constructs a text blob from the DOI's title, creator, and
+        metadata, then generates an embedding via lightersearch and
+        stores it in the ``vec_dois`` table.
+
+        Failures are logged at WARNING level (not raised) so that
+        embedding errors do not block the create/update flow.
         """
+        doi_entry = self.get(doi)
+        if not doi_entry:
+            return
+
+        text = " ".join(
+            filter(None, [
+                doi_entry.get("title", ""),
+                doi_entry.get("creator", ""),
+                doi_entry.get("metadata_json", "{}"),
+            ])
+        )
+        if not text.strip():
+            return
+
+        try:
+            from lightersearch.embed import embed_single, vector_to_bytes
+            from lightersearch.vec import insert_vector
+
+            vec = embed_single(text)
+            vec_bytes = vector_to_bytes(vec)
+            # rowid matches the dois table's rowid
+            rowid = doi_entry["rowid"]
+            insert_vector(self.db, rowid=rowid, vector=vec_bytes)
+        except Exception:
+            import logging
+
+            logging.getLogger("ronzzdoi.db").warning(
+                "Failed to sync embedding for DOI %s", doi, exc_info=True
+            )
 
     def _remove_embedding(self, doi: str) -> None:
         """Remove the embedding for *doi*.
 
-        No-op until lightersearch is available.
+        Failures are logged at WARNING level (not raised).
         """
+        doi_entry = self.get(doi)
+        if not doi_entry:
+            return
+
+        try:
+            from lightersearch.vec import delete_vector
+
+            delete_vector(self.db, rowid=doi_entry["rowid"])
+        except Exception:
+            import logging
+
+            logging.getLogger("ronzzdoi.db").warning(
+                "Failed to remove embedding for DOI %s", doi, exc_info=True
+            )
 
 
 class CitationService(CRUDService):
