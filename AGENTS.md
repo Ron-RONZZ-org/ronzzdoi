@@ -49,7 +49,7 @@ Context resolution order (highest priority first):
 - **CLI command names**: English, singular form (`doi`, `citation`, `search`)
 - **URL paths, route names**: lowercase with hyphens (`/api/v1/doi/resolve`)
 - **Database columns**: English names throughout
-- **DOI format**: `10.ronzz/<prefix>/<suffix>` following DOI Handbook conventions
+- **DOI format**: `10.ronzz/<uuid4-hex>` — opaque identifier, no semantic encoding (per DOI Handbook)
 
 ---
 
