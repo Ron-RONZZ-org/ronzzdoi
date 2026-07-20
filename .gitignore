@@ -33,8 +33,11 @@ dist/
 build/
 junit-*.xml
 
-# opencode plugin worktree state DB (not the config files)
-.opencode/worktree-state.sqlite
+# opencode plugin worktree config and state
+.opencode/
+
+# serena agent memory store
+.serena/
 
 # Coverage
 .coverage
