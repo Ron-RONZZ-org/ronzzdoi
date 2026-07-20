@@ -9,7 +9,8 @@ Part of the [lighter ecosystem](https://github.com/Ron-RONZZ-org).
 ## Features (v0.1.0)
 
 - **DOI assignment** — generate and assign persistent ronzzDOIs
-- **Resolution & redirect** — HTTP redirect from `doi.ronzz.org/<id>` to target URL
+- **DOI format** — identifiers follow the pattern `10.ronzz/<uuid4-hex>` per DOI Handbook
+- **Resolution & redirect** — HTTP redirect from `doi.ronzz.org/10.ronzz/<uuid>` to target URL
 - **Soft redirect** — update target URL with historical redirect preserved
 - **Citation management** — add citations for multiple document types (book, webpage, conference transcript, presentation, circulaire, rulebook, document, media file)
 - **Auto-generated detailed-view pages** — persistent citation landing pages

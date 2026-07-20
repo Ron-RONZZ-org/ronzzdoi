@@ -14,9 +14,10 @@ web/node_modules/
 web/dist/
 web/.svelte-kit/
 
-# IDE
+# IDE / AI tooling
 .vscode/
 .idea/
+.serena/
 *.swp
 *.swo
 
