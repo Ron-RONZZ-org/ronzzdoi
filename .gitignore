@@ -34,8 +34,8 @@ dist/
 build/
 junit-*.xml
 
-# opencode plugin worktree state DB (not the config files)
-.opencode/worktree-state.sqlite
+# opencode plugin artifacts (not the config)
+.opencode/
 
 # Coverage
 .coverage
