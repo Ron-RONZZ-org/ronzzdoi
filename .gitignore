@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+*.so
+.pytest_cache/
+.ruff_cache/
+
+# Node / web frontend
+node_modules/
+web/node_modules/
+web/dist/
+web/.svelte-kit/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Build artifacts
+dist/
+build/
+junit-*.xml
+
+# opencode plugin worktree state DB (not the config files)
+.opencode/worktree-state.sqlite
+
+# Coverage
+.coverage
+coverage.xml
+coverage/
+htmlcov/
+*.py,cover
+
+# Data directory (local dev, not committed)
+data/
+
+# uv
+uv.lock
