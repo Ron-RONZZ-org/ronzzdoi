@@ -5,10 +5,10 @@ tombstone deletion, and paginated listing.
 
 Usage::
 
-    from lightercore.db import LighterbirdDB
+from lightercore.db import LighterDB
     from ronzzdoi.doi.service import DOIService
 
-    db = LighterbirdDB("/path/to/ronzzdoi.db")
+    db = LighterDB("/path/to/ronzzdoi.db")
     db.init_schema(SCHEMA)          # see ronzzdoi.db for schema
     service = DOIService(db)
 
@@ -24,7 +24,7 @@ import uuid
 from typing import Any
 
 from lightercore.crud import CRUDService, now
-from lightercore.db import LighterbirdDB
+from lightercore.db import LighterDB
 
 from ronzzdoi.doi.constants import DOI_PREFIX, UUID4_HEX_LENGTH, is_valid_doi
 from ronzzdoi.doi.exceptions import DOIAmbiguousError, DOINotFoundError
@@ -38,10 +38,10 @@ class DOIService(CRUDService):
     custom primary key generation.
 
     Args:
-        db: A :class:`lightercore.db.LighterbirdDB` instance.
+        db: A :class:`lightercore.db.LighterDB` instance.
     """
 
-    def __init__(self, db: LighterbirdDB) -> None:
+    def __init__(self, db: LighterDB) -> None:
         super().__init__(db, table="dois", pk_column="doi")
 
     # ── DOI generation ──────────────────────────────────────────────────────
