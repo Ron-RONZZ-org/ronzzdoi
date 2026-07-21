@@ -10,20 +10,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from typing import Any
-
 from fastapi import APIRouter, Depends, HTTPException
 from starlette.status import HTTP_400_BAD_REQUEST
 
 from ronzzdoi.server.command import dispatch, get_command_tree
-from ronzzdoi.server.command.handlers.auth import set_auth_db
 from ronzzdoi.server.command.models import CommandRequest, CommandResponse
 from ronzzdoi.server.command.registry import (
     CommandAmbiguousError,
     CommandNotFoundError,
 )
 from ronzzdoi.server.auth_middleware import require_authenticated
-from lightercore.db import LighterDB
 
 router = APIRouter(prefix="/api/v1", tags=["command"])
 
@@ -31,17 +27,16 @@ router = APIRouter(prefix="/api/v1", tags=["command"])
 # ── Module-level references ─────────────────────────────────────────────
 
 
-def mount_command_routes(app: Any, auth_db: LighterDB) -> None:
+def mount_command_routes(app: Any) -> None:
     """Register command routes on the FastAPI application.
 
-    Must be called during server startup, after the auth database has been
-    initialised.
+    The command tree is built automatically from registered ``@command``
+    decorators and served via ``GET /api/v1/command/tree`` for frontend
+    autocomplete.
 
     Args:
         app: The FastAPI application instance.
-        auth_db: The auth database instance (for auth command handlers).
     """
-    set_auth_db(auth_db)
     app.include_router(router)
 
 

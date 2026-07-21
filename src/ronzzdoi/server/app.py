@@ -95,7 +95,7 @@ def create_app(
     mount_auth_routes(app, auth_db)
 
     # ── Mount command routes ───────────────────────────────────────────
-    mount_command_routes(app, auth_db)
+    mount_command_routes(app)
 
     # ── Health check ───────────────────────────────────────────────────
     @app.get("/api/health")
