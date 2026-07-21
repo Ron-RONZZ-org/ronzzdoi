@@ -1,5 +1,7 @@
 # AGENTS.md — Root Project Rules for ronzzdoi
 
+> Current project stage: boilerplate. Do NOT write schema migrations. Everything is subjected to change.
+
 This is the canonical, repo-wide instruction file for AI agents working on **ronzzdoi**.
 
 ## Hierarchical Context Model
