@@ -21,9 +21,8 @@ DOI_SCHEMA = {
     "dois": """
         CREATE TABLE dois (
             doi           TEXT PRIMARY KEY,
-            target_url    TEXT NOT NULL,
+            target_url    TEXT,
             title         TEXT DEFAULT '',
-            creator       TEXT DEFAULT '',
             doi_type      TEXT NOT NULL DEFAULT 'external',
             metadata_json TEXT DEFAULT '{}',
             created_at    TEXT NOT NULL,
@@ -76,7 +75,6 @@ class TestAssign:
         assert result["target_url"] == "https://example.com"
         assert DOI_FORMAT_RE.match(result["doi"])
         assert result["title"] == ""
-        assert result["creator"] == ""
         assert result["doi_type"] == "external"
         assert result["metadata"] == {}
         assert result["created_at"]
@@ -89,13 +87,11 @@ class TestAssign:
             "https://example.org/doc",
             doi_type="circulaire",
             title="Annual Report 2025",
-            creator="Rong Zhou",
             metadata={"lang": "en", "pages": 42},
         )
         assert result["target_url"] == "https://example.org/doc"
         assert result["doi_type"] == "circulaire"
         assert result["title"] == "Annual Report 2025"
-        assert result["creator"] == "Rong Zhou"
         assert result["metadata"] == {"lang": "en", "pages": 42}
         assert DOI_FORMAT_RE.match(result["doi"])
 
@@ -106,7 +102,7 @@ class TestAssign:
         assert r1["doi"] != r2["doi"]
 
     def test_assign_generates_valid_format(self, svc):
-        """Generated DOI matches 10.ronzz/<32-hex> format."""
+        """Generated DOI matches 10.ronzz/<suffix> format."""
         result = svc.assign("https://example.com")
         assert DOI_PATTERN.match(result["doi"])
 
@@ -131,6 +127,23 @@ class TestAssign:
         """None metadata is stored as empty object."""
         result = svc.assign("https://example.com", metadata=None)
         assert result["metadata"] == {}
+
+    def test_assign_entity_doi_no_target_url(self, svc):
+        """Entity DOIs can be assigned without a target_url (nullable)."""
+        result = svc.assign(
+            doi_type="person",
+            title="Ada Lovelace",
+            metadata={"first_name": "Ada", "last_name": "Lovelace"},
+        )
+        assert result["target_url"] is None
+        assert result["doi_type"] == "person"
+
+    def test_assign_validates_doi_format(self, svc):
+        """assign with malformed explicit DOI raises DOIInvalidError."""
+        from ronzzdoi.doi.exceptions import DOIInvalidError
+
+        with pytest.raises(DOIInvalidError, match="Invalid DOI"):
+            svc.create({"doi": "bad-doi", "target_url": "https://x.com"})
 
 
 # ── resolve() ───────────────────────────────────────────────────────────────
@@ -230,12 +243,6 @@ class TestModify:
         updated = svc.modify(created["doi"], title="New Title")
         assert updated["title"] == "New Title"
         assert updated["target_url"] == "https://example.com"  # unchanged
-
-    def test_modify_creator(self, svc):
-        """Changing creator works."""
-        created = svc.assign("https://example.com", creator="Alice")
-        updated = svc.modify(created["doi"], creator="Bob")
-        assert updated["creator"] == "Bob"
 
     def test_modify_doi_type(self, svc):
         """Changing doi_type works (free-text)."""
@@ -439,14 +446,12 @@ class TestEdgeCases:
         created = svc.assign(
             "https://example.com",
             title="Gone",
-            creator="Alice",
             doi_type="report",
             metadata={"version": 1},
         )
         svc.delete_doi(created["doi"])
         resolved = svc.resolve(created["doi"])
         assert resolved["title"] == "Gone"
-        assert resolved["creator"] == "Alice"
         assert resolved["doi_type"] == "report"
         assert resolved["metadata"] == {"version": 1}
 
@@ -465,18 +470,21 @@ class TestDOIValidators:
         """Wrong registrant prefix returns False."""
         assert is_valid_doi("10.wrong/0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d") is False
 
-    def test_is_valid_doi_rejects_short_suffix(self):
-        """Too-short suffix returns False."""
-        assert is_valid_doi("10.ronzz/abc123") is False
+    def test_is_valid_doi_accepts_any_suffix(self):
+        """Any non-empty suffix is valid (opaque identifier)."""
+        assert is_valid_doi("10.ronzz/abc123") is True
+        assert is_valid_doi("10.ronzz/0A1B2C3D4E5F6A7B8C9D0E1F2A3B4C5D") is True
+        assert is_valid_doi("10.ronzz/country/US") is True
+        assert is_valid_doi("10.ronzz/custom/path/with/slashes") is True
+
+    def test_is_valid_doi_rejects_no_suffix(self):
+        """DOI with only prefix and no suffix returns False."""
+        assert is_valid_doi("10.ronzz/") is False
 
     def test_is_valid_doi_rejects_garbage(self):
         """Garbage string returns False."""
         assert is_valid_doi("not-a-doi") is False
         assert is_valid_doi("") is False
-
-    def test_is_valid_doi_rejects_uppercase(self):
-        """Uppercase hex in suffix returns False (must be lowercase)."""
-        assert is_valid_doi("10.ronzz/0A1B2C3D4E5F6A7B8C9D0E1F2A3B4C5D") is False
 
     def test_is_doi_prefix_accepts_full_prefix(self):
         """Full prefix '10.ronzz/' returns True."""
@@ -523,11 +531,9 @@ class TestAdditionalEdgeCases:
         created = svc.assign(
             "https://example.com",
             title="Original",
-            creator="Alice",
             doi_type="book",
         )
         svc.modify(created["doi"], title="Updated")
         resolved = svc.resolve(created["doi"])
         assert resolved["title"] == "Updated"
-        assert resolved["creator"] == "Alice"  # unchanged
         assert resolved["doi_type"] == "book"  # unchanged

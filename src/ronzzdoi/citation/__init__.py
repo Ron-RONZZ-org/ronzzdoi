@@ -1,10 +1,27 @@
-"""Citation management module — add, format, export citations.
+"""Citation formatting engine for ronzzdoi.
 
-Supports multiple document types:
-- External: book, webpage, conference transcript, presentation, film, etc.
-- Internal: circulaire, rulebook, generic document, media file (audio/video/image)
+Reads DOI metadata and returns styled citation text.  No separate citation
+storage — the DOI's ``doi_type`` + ``metadata_json`` are the citation source.
 
-Export styles: APA, Vancouver, MLA, Chicago, BibTeX, JSON.
+See ``docs/AGENTS-citation.md`` for module-level rules and conventions.
+
+Usage::
+
+    from ronzzdoi.citation import CitationFormatter
+
+    formatter = CitationFormatter(doi_service)
+    apa = formatter.format("10.ronzz/<uuid>", style="apa")
+    styles = formatter.available_styles()
 """
 
 from __future__ import annotations
+
+from ronzzdoi.citation.formatter import CitationFormatter
+from ronzzdoi.citation.schemas import DOC_TYPE_SCHEMAS, DOC_TYPES, validate_metadata
+
+__all__ = [
+    "CitationFormatter",
+    "DOC_TYPE_SCHEMAS",
+    "DOC_TYPES",
+    "validate_metadata",
+]

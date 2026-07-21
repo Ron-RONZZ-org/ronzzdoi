@@ -7,7 +7,7 @@ Usage::
 
     from ronzzdoi.db import init_db
 
-    db, doi_svc, cit_svc, red_svc = init_db()
+    db, doi_svc, red_svc = init_db()
     doi = doi_svc.create({"doi": "10.ronzz/books/2024/smith", "target_url": "..."})
 """
 
@@ -19,12 +19,11 @@ from lightercore.db import LighterDB
 from lightercore.paths import data_dir, ensure_dirs, set_app_name
 
 from ronzzdoi.db.schema import MIGRATIONS
-from ronzzdoi.db.service import CitationService, DOIService, RedirectService
+from ronzzdoi.db.service import DOIService, RedirectService
 
 __all__ = [
     "LighterDB",
     "DOIService",
-    "CitationService",
     "RedirectService",
     "init_db",
     "get_db",
@@ -44,7 +43,7 @@ def _after_connect(conn: sqlite3.Connection) -> None:
         pass
 
 
-def init_db(app_name: str = "ronzzdoi") -> tuple[LighterDB, DOIService, CitationService, RedirectService]:
+def init_db(app_name: str = "ronzzdoi") -> tuple[LighterDB, DOIService, RedirectService]:
     """Initialize the database, apply migrations, and return service instances.
 
     Call this once at application startup.  Idempotent — subsequent calls
@@ -58,7 +57,7 @@ def init_db(app_name: str = "ronzzdoi") -> tuple[LighterDB, DOIService, Citation
                   Defaults to ``"ronzzdoi"``.
 
     Returns:
-        Tuple of ``(db, doi_svc, cit_svc, red_svc)``.
+        Tuple of ``(db, doi_svc, red_svc)``.
     """
     set_app_name(app_name)
     ensure_dirs()
@@ -70,10 +69,9 @@ def init_db(app_name: str = "ronzzdoi") -> tuple[LighterDB, DOIService, Citation
     _ensure_vec_table(db)
 
     doi_svc = DOIService(db)
-    cit_svc = CitationService(db)
     red_svc = RedirectService(db)
 
-    return db, doi_svc, cit_svc, red_svc
+    return db, doi_svc, red_svc
 
 
 def _ensure_vec_table(db: LighterDB) -> None:
@@ -86,18 +84,18 @@ def _ensure_vec_table(db: LighterDB) -> None:
         pass
 
 
-_db_state: dict[str, tuple[LighterDB, DOIService, CitationService, RedirectService]] = {}
+_db_state: dict[str, tuple[LighterDB, DOIService, RedirectService]] = {}
 """Module-level singleton cache keyed by *app_name*."""
 
 
-def get_db(app_name: str = "ronzzdoi") -> tuple[LighterDB, DOIService, CitationService, RedirectService]:
+def get_db(app_name: str = "ronzzdoi") -> tuple[LighterDB, DOIService, RedirectService]:
     """Return cached DB and service instances, or initialize if absent.
 
     Args:
         app_name: Application name (must match the first call's value).
 
     Returns:
-        Tuple of ``(db, doi_svc, cit_svc, red_svc)``.
+        Tuple of ``(db, doi_svc, red_svc)``.
     """
     if app_name not in _db_state:
         _db_state[app_name] = init_db(app_name)

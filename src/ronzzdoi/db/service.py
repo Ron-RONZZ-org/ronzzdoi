@@ -1,4 +1,4 @@
-"""Service classes for ronzzdoi — DOIService, CitationService, RedirectService.
+"""Service classes for ronzzdoi — DOIService, RedirectService.
 
 Each class extends :class:`lightercore.crud.CRUDService` with
 domain-specific overrides for primary-key handling, search, and
@@ -177,9 +177,9 @@ class DOIService(CRUDService):
     def _sync_embedding(self, doi: str) -> None:
         """Generate or update an embedding for *doi*.
 
-        Constructs a text blob from the DOI's title, creator, and
-        metadata, then generates an embedding via lightersearch and
-        stores it in the ``vec_dois`` table.
+        Constructs a text blob from the DOI's title and metadata,
+        then generates an embedding via lightersearch and stores it
+        in the ``vec_dois`` table.
 
         Failures are logged at WARNING level (not raised) so that
         embedding errors do not block the create/update flow.
@@ -191,7 +191,6 @@ class DOIService(CRUDService):
         text = " ".join(
             filter(None, [
                 doi_entry.get("title", ""),
-                doi_entry.get("creator", ""),
                 doi_entry.get("metadata_json", "{}"),
             ])
         )
@@ -242,16 +241,6 @@ class DOIService(CRUDService):
             logging.getLogger("ronzzdoi.db").warning(
                 "Failed to remove embedding for DOI %s", doi, exc_info=True
             )
-
-
-class CitationService(CRUDService):
-    """Citation management service.
-
-    Thin wrapper around CRUDService with ``table="citations"``.
-    """
-
-    def __init__(self, db: LighterDB) -> None:
-        super().__init__(db, table="citations", pk_column="citation_id")
 
 
 class RedirectService(CRUDService):
