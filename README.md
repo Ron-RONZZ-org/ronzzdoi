@@ -2,19 +2,18 @@
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
-**ronzzdoi** is the in-house DOI (Digital Object Identifier) and citation management system at ronzz.org. It provides persistent identifiers for external resources (books, films, webpages) and internal documents (circulaire, rulebook, media files), with citation management inspired by Zotero and native semantic web federation support.
+**ronzzdoi** is the in-house DOI (Digital Object Identifier) and citation management system at ronzz.org. It provides persistent identifiers for external resources (books, films, webpages) and internal documents (circulaire, rulebook, media files), with a citation formatting engine inspired by Zotero and native semantic web federation support.
 
 Part of the [lighter ecosystem](https://github.com/Ron-RONZZ-org).
 
 ## Features (v0.1.0)
 
-- **DOI assignment** — generate and assign persistent ronzzDOIs
-- **DOI format** — identifiers follow the pattern `10.ronzz/<uuid4-hex>` per DOI Handbook
-- **Resolution & redirect** — HTTP redirect from `doi.ronzz.org/10.ronzz/<uuid>` to target URL
-- **Soft redirect** — update target URL with historical redirect preserved
-- **Citation management** — add citations for multiple document types (book, webpage, conference transcript, presentation, circulaire, rulebook, document, media file)
-- **Auto-generated detailed-view pages** — persistent citation landing pages
-- **Multi-style export** — APA, Vancouver, MLA, Chicago, BibTeX, JSON
+- **DOI assignment** — generate and assign persistent ronzzDOIs. Entity DOIs (person, abstract_entity, country) have no `target_url`.
+- **DOI format** — identifiers follow the pattern `10.ronzz/<suffix>` (opaque by default; country DOIs use `10.ronzz/country/<ISO>` as documented exception)
+- **Resolution & redirect** — HTTP redirect from `doi.ronzz.org/10.ronzz/<id>` to target URL with soft redirect support
+- **Citation formatting** — read DOI metadata (`doi_type` + `metadata_json`) and produce styled citations in APA, Vancouver, or JSON format
+- **17 doc_types** — book, bookSection, scientificPaper, conferencePaper, presentation, report, dataset, webpage, magazineArticle, newspaperArticle, film, podcast, song, media, circulaire, rulebook, document
+- **Person/entity resolution** — authors reference person DOIs; formatters resolve names at format time with per-call caching
 - **FTS5 full-text search** — search across DOI metadata via SQLite FTS5
 - **Semantic search** (v0.2.0) — vector search via sqlite-vec + fastembed (optional `lightersearch` dependency)
 - **CLI & Svelte 5 GUI** — dual interfaces following lighterbird patterns

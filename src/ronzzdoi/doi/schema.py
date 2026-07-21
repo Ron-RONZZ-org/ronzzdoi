@@ -22,16 +22,18 @@ class RedirectRecord(BaseModel):
 class DOIAssignRequest(BaseModel):
     """Request model for assigning a new DOI."""
 
-    target_url: str = Field(..., description="The target URL the DOI resolves to")
+    target_url: str | None = Field(
+        default=None,
+        description="The target URL the DOI resolves to. NULL for entity DOIs (person, abstract_entity, country).",
+    )
     doi_type: str = Field(
         default="external",
-        description="Free-text type descriptor (e.g. 'book', 'webpage', 'circulaire')",
+        description="Free-text type descriptor. Citation doc_types (book, webpage, circulaire) or entity types (person, abstract_entity, country).",
     )
     title: str = Field(default="", description="Human-readable title of the resource")
-    creator: str = Field(default="", description="Author or creator of the resource")
     metadata: dict[str, Any] = Field(
         default_factory=dict,
-        description="Arbitrary key-value metadata stored as JSON",
+        description="Type-specific fields per doc_type (see citation.schemas.DOC_TYPE_SCHEMAS).",
     )
 
 
@@ -46,7 +48,6 @@ class DOIModifyRequest(BaseModel):
         description="New target URL (triggers soft redirect if changed)",
     )
     title: str | None = None
-    creator: str | None = None
     doi_type: str | None = None
     metadata: dict[str, Any] | None = None
 
@@ -58,9 +59,8 @@ class DOIResponse(BaseModel):
     """
 
     doi: str
-    target_url: str
+    target_url: str | None = None
     title: str = ""
-    creator: str = ""
     doi_type: str = "external"
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: str

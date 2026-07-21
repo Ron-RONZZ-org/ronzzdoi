@@ -4,12 +4,15 @@ Defines the canonical ronzzDOI format and validation helpers.
 
 Format::
 
-    10.ronzz/<uuid4-hex>
+    10.ronzz/<suffix>
 
 Where:
     - ``10`` — DOI directory indicator (DOI namespace)
     - ``ronzz`` — registrant code for ronzz.org
-    - ``<uuid4-hex>`` — 32-character lowercase hex UUID4 (no dashes)
+    - ``<suffix>`` — free-form (no semantic encoding per DOI Handbook).
+
+Entity DOIs use non-opaque suffixes as documented exceptions:
+``10.ronzz/country/<ISO_3166-1_alpha-2>``.
 """
 
 from __future__ import annotations
@@ -27,7 +30,7 @@ UUID4_HEX_LENGTH = 32
 # ── Compiled regex for full DOI validation ──────────────────────────────────
 
 DOI_PATTERN = re.compile(
-    rf"^{re.escape(DOI_PREFIX)}/([0-9a-f]{{{UUID4_HEX_LENGTH}}})$",
+    rf"^{re.escape(DOI_PREFIX)}/.+$",
 )
 
 DOI_PREFIX_PATTERN = re.compile(
@@ -36,7 +39,12 @@ DOI_PREFIX_PATTERN = re.compile(
 
 
 def is_valid_doi(doi: str) -> bool:
-    """Return True if *doi* matches the canonical ronzzDOI format."""
+    """Return True if *doi* matches the canonical ronzzDOI format.
+
+    Accepts any non-empty suffix after ``10.ronzz/`` per the
+    DOI Handbook's opaque-identifier principle (with documented
+    exceptions for country DOIs).
+    """
     return DOI_PATTERN.match(doi) is not None
 
 

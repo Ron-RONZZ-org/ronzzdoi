@@ -27,7 +27,11 @@ from lightercore.crud import CRUDService, now
 from lightercore.db import LighterDB
 
 from ronzzdoi.doi.constants import DOI_PREFIX, UUID4_HEX_LENGTH, is_valid_doi
-from ronzzdoi.doi.exceptions import DOIAmbiguousError, DOINotFoundError
+from ronzzdoi.doi.exceptions import (
+    DOIAmbiguousError,
+    DOIInvalidError,
+    DOINotFoundError,
+)
 
 
 class DOIService(CRUDService):
@@ -80,6 +84,12 @@ class DOIService(CRUDService):
         ts = now()
         data = dict(data)
         data.setdefault("doi", self.generate_doi())
+        # Validate DOI format for user-supplied DOIs
+        if "doi" in data and not is_valid_doi(data["doi"]):
+            raise DOIInvalidError(
+                data["doi"],
+                reason="DOI must start with '10.ronzz/' followed by a non-empty suffix.",
+            )
         data.setdefault("created_at", ts)
         data["updated_at"] = ts
 
@@ -109,39 +119,46 @@ class DOIService(CRUDService):
 
     def assign(
         self,
-        target_url: str,
+        target_url: str | None = None,
         *,
         doi_type: str = "external",
         title: str = "",
-        creator: str = "",
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Assign a new ronzzDOI for *target_url*.
+        """Assign a new ronzzDOI.
 
-        This is the primary entry point for DOI creation.  The ``doi_type``
-        field is free-text and stored as-is in the database.
+        ``target_url`` is optional — entity DOIs (person, abstract_entity,
+        country) set ``target_url=NULL``.  The ``doi_type`` field is
+        free-text and stored as-is; citation doc_types (book, webpage, …)
+        use their type name here.
 
         Args:
             target_url: The URL the DOI should resolve to.
+                        ``None`` for entity DOIs.
             doi_type: Free-text type descriptor (default ``"external"``).
+                      Use citation doc_type names (book, webpage, …) or
+                      entity type names (person, abstract_entity, country).
             title: Human-readable title.
-            creator: Author or creator name.
-            metadata: Arbitrary key-value data (serialized to JSON).
+            metadata: Type-specific fields (serialized to JSON).  Required
+                      keys depend on ``doi_type`` (see citation.schemas).
 
         Returns:
             The newly created DOI record.
 
         Raises:
+            DOIInvalidError: If a user-supplied ``doi`` is malformed.
             DOIExistsError: If a UUID collision occurs (astronomically rare).
         """
         data: dict[str, Any] = {
-            "target_url": target_url,
             "doi_type": doi_type,
             "title": title,
-            "creator": creator,
             "metadata_json": json.dumps(metadata or {}),
         }
+        if target_url is not None:
+            data["target_url"] = target_url
         result = self.create(data)
+        # Ensure target_url is always present in the response (nullable)
+        result.setdefault("target_url", None)
         # Deserialize metadata_json to metadata for API consistency
         self._deserialize_record(result)
         return result
@@ -203,7 +220,6 @@ class DOIService(CRUDService):
         *,
         target_url: str | None = None,
         title: str | None = None,
-        creator: str | None = None,
         doi_type: str | None = None,
         metadata: dict[str, Any] | None = None,
         redirect_note: str = "",
@@ -217,7 +233,6 @@ class DOIService(CRUDService):
             doi: Full DOI or prefix to modify.
             target_url: New target URL (triggers soft redirect if changed).
             title: New title.
-            creator: New creator.
             doi_type: New type descriptor.
             metadata: New metadata dict (replaces existing entirely).
             redirect_note: Optional note for the redirect entry.
@@ -236,14 +251,13 @@ class DOIService(CRUDService):
         update_data: dict[str, Any] = {}
 
         # URL change → soft redirect
-        if target_url is not None and target_url != old["target_url"]:
+        if target_url is not None and target_url != old.get("target_url"):
             update_data["target_url"] = target_url
-            self._record_redirect(old["doi"], old["target_url"], redirect_note)
+            old_url = old.get("target_url") or "(none)"
+            self._record_redirect(old["doi"], old_url, redirect_note)
 
         if title is not None:
             update_data["title"] = title
-        if creator is not None:
-            update_data["creator"] = creator
         if doi_type is not None:
             update_data["doi_type"] = doi_type
         if metadata is not None:

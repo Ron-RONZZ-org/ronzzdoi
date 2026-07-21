@@ -51,7 +51,7 @@ Context resolution order (highest priority first):
 - **CLI command names**: English, singular form (`doi`, `citation`, `search`)
 - **URL paths, route names**: lowercase with hyphens (`/api/v1/doi/resolve`)
 - **Database columns**: English names throughout
-- **DOI format**: `10.ronzz/<uuid4-hex>` — opaque identifier, no semantic encoding (per DOI Handbook)
+- **DOI format**: `10.ronzz/<suffix>` — opaque identifier, no semantic encoding (per DOI Handbook); entity exceptions: `10.ronzz/country/<ISO>`
 
 ---
 
@@ -177,7 +177,7 @@ Following the lighterbird pattern, ronzzdoi operations are accessible through mu
 | Auth | `docs/AGENTS-auth.md` | `docs/man/auth.md` |
 | CLI | `docs/AGENTS-cli.md` | `docs/man/cli.md` |
 
-Current status: DB module ✓ (implemented). Other modules are placeholders.
+Current status: DB module ✓ (implemented), DOI module ✓ (implemented), Citation module ✓ (implemented). Other modules are placeholders.
 
 ---
 
