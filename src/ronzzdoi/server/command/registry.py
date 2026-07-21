@@ -18,7 +18,10 @@ from typing import Any, Callable
 
 # ── In-memory registry ──────────────────────────────────────────────────
 
-_handlers: dict[str, Callable[[dict[str, str]], dict[str, Any]]] = {}
+HandlerFunc = Callable[[dict[str, str], dict[str, Any] | None], dict[str, Any]]
+"""Handler signature: ``(flags, user)`` where ``user`` is the authenticated user dict or None."""
+
+_handlers: dict[str, HandlerFunc] = {}
 """Maps dot-separated command paths (e.g. ``"auth.api_key.list"``) to handler functions."""
 
 _descriptions: dict[str, str] = {}
@@ -47,14 +50,17 @@ def command(
     """
 
     def decorator(func: Callable) -> Callable:
-        _handlers[path] = func
+        @functools.wraps(func)
+        def wrapper(
+            flags: dict[str, str],
+            user: dict[str, Any] | None = None,
+        ) -> dict[str, Any]:
+            return func(flags, user)
+
+        _handlers[path] = wrapper
         if description:
             _descriptions[path] = description
         _invalidate_cache()
-
-        @functools.wraps(func)
-        def wrapper(flags: dict[str, str]) -> dict[str, Any]:
-            return func(flags)
 
         return wrapper
 
@@ -76,7 +82,7 @@ def register_module(
     prefer explicit registration.
     """
     for path, (func, desc) in module_handlers.items():
-        _handlers[path] = func
+        _handlers[path] = func  # register_module callers must provide wrapper-compatible funcs
         if desc:
             _descriptions[path] = desc
     _invalidate_cache()
@@ -96,12 +102,15 @@ class CommandAmbiguousError(ValueError):
 def dispatch(
     tokens: list[str],
     flags: dict[str, str],
+    user: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Dispatch a command to its registered handler.
 
     Args:
         tokens: Command tokens, e.g. ``["auth", "api_key", "list"]``.
         flags: Flag arguments parsed from the command line.
+        user: Authenticated user dict from the auth middleware, or None
+            if the endpoint allows unauthenticated access.
 
     Returns:
         A dict with ``type``, ``title``, ``data`` — the structured response
@@ -120,7 +129,7 @@ def dispatch(
     handler = _handlers.get(candidate)
 
     if handler is not None:
-        return handler(flags)
+        return handler(flags, user)
 
     # Partial match: find all commands that start with the given prefix
     prefix = candidate + "."
@@ -136,7 +145,7 @@ def dispatch(
         # Auto-complete to the single match
         single_path = next(iter(matches))
         handler = _handlers[single_path]
-        return handler(flags)
+        return handler(flags, user)
 
     # Multiple matches — show available subcommands
     raise CommandAmbiguousError(

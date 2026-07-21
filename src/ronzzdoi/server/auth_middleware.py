@@ -95,6 +95,26 @@ async def optional_read_access(
     return await _auth.optional_user(authorization)
 
 
+async def require_authenticated(
+    authorization: str | None = Header(None),
+) -> dict[str, Any]:
+    """Require any authenticated user (no permission check).
+
+    Use on endpoints that need to know the caller's identity but don't
+    need specific permissions (e.g. the command dispatch endpoint).
+
+    Validates:
+    - The ``Authorization: Bearer <token>`` header is present and valid.
+    - The user's account is active (not suspended).
+
+    Raises:
+        HTTPException (401): Missing or invalid credentials.
+        HTTPException (403): Suspended account.
+    """
+    _check_inited()
+    return await _auth.require_active_user(authorization)
+
+
 async def require_admin_role(
     authorization: str | None = Header(None),
 ) -> dict[str, Any]:

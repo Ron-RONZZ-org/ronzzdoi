@@ -10,7 +10,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException
 from starlette.status import HTTP_400_BAD_REQUEST
 
 from ronzzdoi.server.command import dispatch, get_command_tree
@@ -20,6 +22,7 @@ from ronzzdoi.server.command.registry import (
     CommandAmbiguousError,
     CommandNotFoundError,
 )
+from ronzzdoi.server.auth_middleware import require_authenticated
 from lightercore.db import LighterDB
 
 router = APIRouter(prefix="/api/v1", tags=["command"])
@@ -46,15 +49,19 @@ def mount_command_routes(app: Any, auth_db: LighterDB) -> None:
 
 
 @router.post("/command", response_model=CommandResponse)
-async def execute_command(body: CommandRequest) -> CommandResponse:
+async def execute_command(
+    body: CommandRequest,
+    user: dict[str, Any] = Depends(require_authenticated),
+) -> CommandResponse:
     """Execute a ``!command`` and return structured data.
 
+    Requires a valid ``Authorization: Bearer <key>`` header.
     The frontend sends parsed tokens and flags; the backend dispatches to
     the registered handler and returns a ``{type, title, data}`` response
     that the frontend renders as a tab.
     """
     try:
-        result = dispatch(body.tokens, body.flags)
+        result = dispatch(body.tokens, body.flags, user)
     except CommandNotFoundError as exc:
         raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail=str(exc))
     except CommandAmbiguousError as exc:
