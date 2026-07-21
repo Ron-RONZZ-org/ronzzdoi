@@ -3,6 +3,7 @@
 Creates and configures the API server with:
 - Auth middleware (API key verification, route protection)
 - API key management endpoints
+- Command dispatch (``!xxx`` commands from the frontend)
 - CORS (ready for future Svelte frontend)
 
 Usage::
@@ -27,6 +28,7 @@ from ronzzdoi.auth import setup_auth
 from ronzzdoi.auth.config import resolve_auth_db_path
 from ronzzdoi.server.auth_middleware import init_auth_deps
 from ronzzdoi.server.auth_routes import mount_auth_routes
+from ronzzdoi.server.command_routes import mount_command_routes
 
 _DEFAULT_PORT = 8000
 """Default port for the API server."""
@@ -91,6 +93,9 @@ def create_app(
 
     # ── Mount auth routes ──────────────────────────────────────────────
     mount_auth_routes(app, auth_db)
+
+    # ── Mount command routes ───────────────────────────────────────────
+    mount_command_routes(app, auth_db)
 
     # ── Health check ───────────────────────────────────────────────────
     @app.get("/api/health")

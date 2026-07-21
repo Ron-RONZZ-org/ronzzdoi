@@ -176,3 +176,160 @@ class TestRevokeApiKey:
         )
         names = [k["name"] for k in list_resp.json()]
         assert "to-be-revoked" not in names
+
+
+class TestUpdateApiKey:
+    """PATCH /api/v1/auth/keys/{key_id} — update an API key."""
+
+    def test_unauthenticated(self, client: TestClient) -> None:
+        """PATCH without auth → 401."""
+        resp = client.patch(
+            "/api/v1/auth/keys/some-id",
+            json={"name": "new-name"},
+        )
+        assert resp.status_code == 401, resp.text
+
+    def test_update_name(
+        self, client: TestClient, admin_api_key_full: str
+    ) -> None:
+        """PATCH updates the key name."""
+        # First create a key
+        create_resp = client.post(
+            "/api/v1/auth/keys",
+            json={"name": "original-name", "permission": "read_only"},
+            headers={"Authorization": f"Bearer {admin_api_key_full}"},
+        )
+        assert create_resp.status_code == 201
+        key_id = create_resp.json()["id"]
+
+        # Update the name
+        resp = client.patch(
+            f"/api/v1/auth/keys/{key_id}",
+            json={"name": "updated-name"},
+            headers={"Authorization": f"Bearer {admin_api_key_full}"},
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["name"] == "updated-name"
+        assert data["id"] == key_id
+        assert "key" not in data  # must not leak the raw key
+
+    def test_update_permission(
+        self, client: TestClient, admin_api_key_full: str
+    ) -> None:
+        """PATCH updates the permission."""
+        create_resp = client.post(
+            "/api/v1/auth/keys",
+            json={"name": "perm-test", "permission": "read_only"},
+            headers={"Authorization": f"Bearer {admin_api_key_full}"},
+        )
+        assert create_resp.status_code == 201
+        key_id = create_resp.json()["id"]
+
+        resp = client.patch(
+            f"/api/v1/auth/keys/{key_id}",
+            json={"permission": "full_access"},
+            headers={"Authorization": f"Bearer {admin_api_key_full}"},
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["permission"] == "full_access"
+
+    def test_update_expiry(
+        self, client: TestClient, admin_api_key_full: str
+    ) -> None:
+        """PATCH updates the expiration date."""
+        create_resp = client.post(
+            "/api/v1/auth/keys",
+            json={"name": "expiry-test", "permission": "read_only"},
+            headers={"Authorization": f"Bearer {admin_api_key_full}"},
+        )
+        assert create_resp.status_code == 201
+        key_id = create_resp.json()["id"]
+
+        resp = client.patch(
+            f"/api/v1/auth/keys/{key_id}",
+            json={"expires_at": "2028-12-31T23:59:59Z"},
+            headers={"Authorization": f"Bearer {admin_api_key_full}"},
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["expires_at"] is not None
+        assert "2028" in data["expires_at"]
+
+    def test_clear_expiry(
+        self, client: TestClient, admin_api_key_full: str
+    ) -> None:
+        """PATCH with expires_at=null clears the expiration."""
+        create_resp = client.post(
+            "/api/v1/auth/keys",
+            json={
+                "name": "clear-expiry",
+                "permission": "read_only",
+                "expires_at": "2028-01-01T00:00:00Z",
+            },
+            headers={"Authorization": f"Bearer {admin_api_key_full}"},
+        )
+        assert create_resp.status_code == 201
+        key_id = create_resp.json()["id"]
+
+        resp = client.patch(
+            f"/api/v1/auth/keys/{key_id}",
+            json={"expires_at": None},
+            headers={"Authorization": f"Bearer {admin_api_key_full}"},
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["expires_at"] is None
+
+    def test_invalid_permission(
+        self, client: TestClient, admin_api_key_full: str
+    ) -> None:
+        """PATCH with an invalid permission → 422."""
+        create_resp = client.post(
+            "/api/v1/auth/keys",
+            json={"name": "bad-perm-upd", "permission": "read_only"},
+            headers={"Authorization": f"Bearer {admin_api_key_full}"},
+        )
+        assert create_resp.status_code == 201
+        key_id = create_resp.json()["id"]
+
+        resp = client.patch(
+            f"/api/v1/auth/keys/{key_id}",
+            json={"permission": "super_admin"},
+            headers={"Authorization": f"Bearer {admin_api_key_full}"},
+        )
+        assert resp.status_code == 422, resp.text
+
+    def test_nonexistent_key(
+        self, client: TestClient, admin_api_key_full: str
+    ) -> None:
+        """PATCH on a non-existent key → 404."""
+        resp = client.patch(
+            "/api/v1/auth/keys/nonexistent-99999",
+            json={"name": "noop"},
+            headers={"Authorization": f"Bearer {admin_api_key_full}"},
+        )
+        assert resp.status_code == 404, resp.text
+
+    def test_no_changes(
+        self, client: TestClient, admin_api_key_full: str
+    ) -> None:
+        """PATCH with no fields → returns current key unchanged."""
+        create_resp = client.post(
+            "/api/v1/auth/keys",
+            json={"name": "no-change", "permission": "read_only"},
+            headers={"Authorization": f"Bearer {admin_api_key_full}"},
+        )
+        assert create_resp.status_code == 201
+        key_id = create_resp.json()["id"]
+
+        resp = client.patch(
+            f"/api/v1/auth/keys/{key_id}",
+            json={},
+            headers={"Authorization": f"Bearer {admin_api_key_full}"},
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["name"] == "no-change"
+        assert data["permission"] == "read_only"
