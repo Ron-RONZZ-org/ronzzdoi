@@ -42,6 +42,19 @@ Context resolution order (highest priority first):
 | **lighterbird** | `../lighterbird` | Reference for CLI/GUI/LLM-UI interaction patterns |
 | **midiverse** | `../midiverse` (clone into kodo/) | AUTH code reference |
 
+### Disk Locations (absolute paths)
+
+All sibling repos live under `/home/rongzhou/kodo/autish/`:
+
+| Project | Absolute path |
+|---------|--------------|
+| **ronzzdoi** | `/home/rongzhou/kodo/autish/ronzzdoi/` — this repo |
+| **lightercore** | `/home/rongzhou/kodo/autish/lightercore/` |
+| **lighterbird** | `/home/rongzhou/kodo/autish/lighterbird/` |
+| **midiverse** | `/home/rongzhou/kodo/autish/midiverse/` |
+
+Relative references in this file (e.g., `../lightercore`) resolve correctly because all repos share the same parent directory.
+
 ---
 
 ## Language and Naming Conventions
@@ -119,9 +132,11 @@ ronzzdoi/
 1. **No file > 500 lines.** Split by functional unit.
 2. **Type hints on all public functions.** Use `from __future__ import annotations`.
 3. **Docstrings on all public functions.** Google-style or reStructuredText.
-4. **Extend lightercore** — do not duplicate functionality that exists in lightercore.
-5. **SQLite in WAL mode.** Use `pragma journal_mode=wal` on connection.
-6. **Error messages include actionable suggestions.**
+4. **Tests required for all modules.** `pytest` with `tmp_path` isolation for DB tests.
+5. **Extend lightercore** — do not duplicate functionality that exists in lightercore.
+6. **SQLite in WAL mode.** Use `pragma journal_mode=wal` on connection.
+7. **Error messages include actionable suggestions.**
+8. **Async where it matters.** FastAPI routes are async; CLI commands can be sync.
 
 ---
 
@@ -140,6 +155,26 @@ Following the lighterbird pattern, ronzzdoi operations are accessible through mu
 
 ---
 
+## Commit Message Format
+
+Use [Conventional Commits](https://www.conventionalcommits.org/):
+
+- `feat:` — new user-facing feature
+- `fix:` — bug fix
+- `docs:` — documentation only
+- `chore:` — tooling, config, CI
+- `test:` — test additions/fixes
+- `refactor:` — code restructuring with no behavior change
+- `doi:` — DOI module changes
+- `citation:` — citation module changes
+- `db:` — database schema or migration changes
+- `auth:` — authentication module changes
+- `server:` — API server changes
+- `cli:` — CLI command changes
+- `web:` — frontend-only changes (Svelte)
+
+---
+
 ## Testing Requirements
 
 | Aspect | Convention |
@@ -154,6 +189,35 @@ Following the lighterbird pattern, ronzzdoi operations are accessible through mu
 1. **Test via the public API wherever possible.** Prefer integration tests over isolated unit tests.
 2. **Test through the user-facing interface** (CLI commands, API endpoints).
 3. **Every bug fix must include a test** that would have caught the regression.
+
+### Running Tests from Git Worktrees
+
+When running tests in a git worktree (created by `worktreeCreate` or `git worktree add`),
+the worktree does **not** have its own `.venv` — it shares the main checkout's virtual
+environment. The project provides a convenience script that auto-detects this:
+
+```bash
+./scripts/test.sh [pytest-args...]
+```
+
+This script:
+1. Detects if the current directory is inside a git worktree via
+   `git rev-parse --is-inside-work-tree`.
+2. If yes, finds the **main checkout's** `.venv` via `git rev-parse --git-common-dir`
+   and uses that Python interpreter, with `PYTHONPATH=<worktree-root>/src` to pick up
+   the worktree's code (the main checkout's editable install `.pth` file still points
+   to the parent `src/`, so `PYTHONPATH` must override it).
+3. If in the main checkout, runs `python -m pytest` directly (assumes `.venv` is active).
+
+**Example** — run DOI tests from a worktree:
+```bash
+./scripts/test.sh tests/test_doi_service.py -x -v
+```
+
+**Manual invocation** (equivalent to what the script does for a worktree):
+```bash
+PYTHONPATH=src /path/to/main/checkout/.venv/bin/python -m pytest tests/...
+```
 
 ---
 
