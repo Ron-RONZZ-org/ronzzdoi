@@ -121,6 +121,8 @@ def _record_to_public(record: dict[str, Any]) -> dict[str, Any]:
     """Convert a DOI service record dict to a public-safe response dict.
 
     Excludes: ``status``, ``redirect_history``, ``deleted_at``, ``updated_at``.
+
+    Passes through the optional ``snippet`` key (populated by FTS5 search).
     """
     metadata = record.get("metadata")
     if metadata is None:
@@ -132,6 +134,7 @@ def _record_to_public(record: dict[str, Any]) -> dict[str, Any]:
         "doi_type": record.get("doi_type", "external"),
         "metadata": metadata,
         "created_at": record["created_at"],
+        "snippet": record.get("snippet"),
     }
 
 
@@ -201,10 +204,21 @@ async def public_search(
     request: Request,
     q: str = "",
     doi_type: str = "",
+    mode: str = "fts",
     limit: int = 20,
     offset: int = 0,
 ) -> dict[str, Any]:
     """Search DOIs by type and query (public, read-only).
+
+    Two search modes are available:
+
+    - ``mode=fts`` (default): FTS5 full-text search. Results include a
+      highlighted ``snippet`` excerpt when a search query is provided.
+    - ``mode=semantic``: Vector/semantic search via lightersearch.
+      Requires the optional ``lightersearch`` package to be installed
+      and the ``ronzzdoi[public,semantic]`` extras.  Falls back to FTS5
+      if lightersearch is unavailable.  Semantic results do **not**
+      include a ``snippet`` field.
 
     The ``limit`` parameter is silently capped at **50** to prevent
     bulk export via a single request.  No authentication required.
@@ -223,11 +237,17 @@ async def public_search(
             "total": len(results),
             "limit": limit,
             "offset": offset,
+            "mode": mode,
         }
 
     search_svc = _get_search_svc()
-    if search_svc is not None:
-        results = search_svc.search_fts(q, limit=limit)
+
+    if mode == "semantic" and search_svc is not None:
+        # Semantic search — use unified dispatch mode
+        results = search_svc.search(q, mode="semantic", limit=limit)
+    elif search_svc is not None:
+        # FTS5 search with snippet highlighting
+        results = search_svc.search_fts_with_snippet(q, limit=limit)
     else:
         results = svc.list_dois(limit=limit, offset=offset)
 
@@ -239,6 +259,7 @@ async def public_search(
         "total": len(results),
         "limit": limit,
         "offset": offset,
+        "mode": mode,
     }
 
 

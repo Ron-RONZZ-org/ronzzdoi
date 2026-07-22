@@ -100,10 +100,50 @@ class DOIService(CRUDService):
         Returns:
             List of DOI dicts matching the query, ordered by relevance.
         """
+        return self._search_fts(query, limit, include_snippet=False)
+
+    def search_fts_with_snippet(
+        self, query: str, limit: int = 20
+    ) -> list[dict[str, Any]]:
+        """Full-text search with a highlighted ``snippet`` field.
+
+        Uses SQLite FTS5's built-in ``snippet()`` function to extract
+        the best-matching excerpt from the ``title`` column.
+
+        Args:
+            query: FTS5 query string.
+            limit: Maximum number of results.
+
+        Returns:
+            List of DOI dicts with an extra ``snippet`` key containing an
+            HTML-highlighted excerpt (``<mark>...</mark>``), or ``None``
+            for each result if the query is empty.
+        """
+        return self._search_fts(query, limit, include_snippet=True)
+
+    def _search_fts(
+        self, query: str, limit: int = 20, include_snippet: bool = False
+    ) -> list[dict[str, Any]]:
+        """Internal FTS5 search implementation.
+
+        Args:
+            query: FTS5 query string.
+            limit: Maximum number of results.
+            include_snippet: If ``True``, include an FTS5 ``snippet()``
+                excerpt in each result dict under the ``snippet`` key.
+
+        Returns:
+            List of DOI dicts matching the query, ordered by relevance.
+        """
         if not query.strip():
             return []
-        sql = """
-            SELECT d.*
+        snippet_col = (
+            ", snippet(dois_fts, 1, '<mark>', '</mark>', '…', 64) AS snippet"
+            if include_snippet
+            else ""
+        )
+        sql = f"""
+            SELECT d.*{snippet_col}
             FROM dois d
             JOIN dois_fts f ON d.rowid = f.rowid
             WHERE dois_fts MATCH ?
