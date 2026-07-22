@@ -57,7 +57,11 @@ class TestCommandDecorator:
         """A single @command registers one handler."""
 
         @command("test.hello", description="Say hello")
-        def _handler(flags: dict[str, str], user: dict | None = None) -> dict:
+        def _handler(
+            flags: dict[str, str],
+            positionals: list[str],
+            user: dict | None = None,
+        ) -> dict:
             return {"type": "success", "title": "Hello", "data": {"msg": "world"}}
 
         assert "test.hello" in _handlers
@@ -67,11 +71,11 @@ class TestCommandDecorator:
         """Multiple @command decorators register independently."""
 
         @command("a.b", description="AB")
-        def _ab(flags, user=None):  # type: ignore
+        def _ab(flags, positionals, user=None):  # type: ignore
             return {"type": "detail", "title": "AB", "data": {}}
 
         @command("a.c", description="AC")
-        def _ac(flags, user=None):  # type: ignore
+        def _ac(flags, positionals, user=None):  # type: ignore
             return {"type": "detail", "title": "AC", "data": {}}
 
         assert "a.b" in _handlers
@@ -83,7 +87,7 @@ class TestCommandDecorator:
         """@command without description does not add to _descriptions."""
 
         @command("test.noop")
-        def _noop(flags, user=None):  # type: ignore
+        def _noop(flags, positionals, user=None):  # type: ignore
             return {"type": "success", "title": "OK", "data": None}
 
         assert "test.noop" in _handlers
@@ -98,8 +102,8 @@ class TestRegisterModule:
 
     def test_basic(self) -> None:
         register_module({
-            "mod.a": (lambda f, u=None: {"type": "detail", "title": "A", "data": {}}, "Module A"),
-            "mod.b": (lambda f, u=None: {"type": "detail", "title": "B", "data": {}}, "Module B"),
+            "mod.a": (lambda f, p, u=None: {"type": "detail", "title": "A", "data": {}}, "Module A"),
+            "mod.b": (lambda f, p, u=None: {"type": "detail", "title": "B", "data": {}}, "Module B"),
         })
         assert "mod.a" in _handlers
         assert "mod.b" in _handlers
@@ -114,18 +118,53 @@ class TestDispatch:
 
     def test_exact_match(self) -> None:
         @command("auth.api_key.list", description="List keys")
-        def _list(flags, user=None):  # type: ignore
+        def _list(flags, positionals, user=None):  # type: ignore
             return {"type": "list", "title": "Keys", "data": [1, 2, 3]}
 
         result = dispatch(["auth", "api_key", "list"], {}, _MOCK_USER)
         assert result["type"] == "list"
         assert result["data"] == [1, 2, 3]
 
+    def test_passes_positionals(self) -> None:
+        """Positional tokens after the command path are passed to the handler."""
+
+        @command("doi.resolve", description="Resolve a DOI")
+        def _resolve(flags, positionals, user=None):  # type: ignore
+            return {"type": "detail", "title": "Resolved", "data": {"doi": positionals[0]}}
+
+        result = dispatch(["doi", "resolve", "10.ronzz/abc123"], {}, _MOCK_USER)
+        assert result["data"]["doi"] == "10.ronzz/abc123"
+
+    def test_passes_multiple_positionals(self) -> None:
+        """Multiple positional args are passed correctly."""
+
+        @command("doi.merge", description="Merge DOIs")
+        def _merge(flags, positionals, user=None):  # type: ignore
+            return {
+                "type": "detail",
+                "title": "Merged",
+                "data": {"source": positionals[0], "target": positionals[1]},
+            }
+
+        result = dispatch(["doi", "merge", "10.ronzz/src", "10.ronzz/tgt"], {}, _MOCK_USER)
+        assert result["data"]["source"] == "10.ronzz/src"
+        assert result["data"]["target"] == "10.ronzz/tgt"
+
+    def test_empty_positionals_for_no_args(self) -> None:
+        """Handler receives empty list when no positional args."""
+
+        @command("doi.list", description="List DOIs")
+        def _list(flags, positionals, user=None):  # type: ignore
+            return {"type": "list", "title": "DOIs", "data": {"pos_len": len(positionals)}}
+
+        result = dispatch(["doi", "list"], {}, _MOCK_USER)
+        assert result["data"]["pos_len"] == 0
+
     def test_passes_user_context(self) -> None:
         """Handler receives the authenticated user dict."""
 
         @command("test.whoami", description="Who am I")
-        def _whoami(flags, user=None):  # type: ignore
+        def _whoami(flags, positionals, user=None):  # type: ignore
             return {"type": "detail", "title": "User", "data": {"id": user["id"] if user else None}}
 
         result = dispatch(["test", "whoami"], {}, _MOCK_USER)
@@ -137,10 +176,12 @@ class TestDispatch:
 
     def test_passes_flags(self) -> None:
         @command("test.flags", description="Flag test")
-        def _flags(flags, user=None):  # type: ignore
+        def _flags(flags, positionals, user=None):  # type: ignore
             return {"type": "detail", "title": "Flags", "data": flags}
 
-        result = dispatch(["test", "flags"], {"include-expired": "", "limit": "10"}, _MOCK_USER)
+        result = dispatch(
+            ["test", "flags"], {"include-expired": "", "limit": "10"}, _MOCK_USER,
+        )
         assert result["data"] == {"include-expired": "", "limit": "10"}
 
     def test_not_found(self) -> None:
@@ -157,11 +198,11 @@ class TestDispatch:
         """Partial match with multiple subcommands raises CommandAmbiguousError."""
 
         @command("auth.api_key.list", description="List")
-        def _list(flags, user=None):  # type: ignore
+        def _list(flags, positionals, user=None):  # type: ignore
             return {"type": "list", "title": "Keys", "data": []}
 
         @command("auth.api_key.create", description="Create")
-        def _create(flags, user=None):  # type: ignore
+        def _create(flags, positionals, user=None):  # type: ignore
             return {"type": "form", "title": "Create Key", "data": {}}
 
         with pytest.raises(CommandAmbiguousError) as exc_info:
@@ -188,7 +229,7 @@ class TestCommandTree:
 
     def test_single_handler(self) -> None:
         @command("auth.api_key.list", description="List API keys")
-        def _list(flags, user=None):  # type: ignore
+        def _list(flags, positionals, user=None):  # type: ignore
             pass
 
         tree = get_command_tree()
@@ -204,11 +245,11 @@ class TestCommandTree:
 
     def test_multiple_groups(self) -> None:
         @command("auth.api_key.list", description="List keys")
-        def _list(flags, user=None):  # type: ignore
+        def _list(flags, positionals, user=None):  # type: ignore
             pass
 
         @command("doi.assign", description="Assign a DOI")
-        def _assign(flags, user=None):  # type: ignore
+        def _assign(flags, positionals, user=None):  # type: ignore
             pass
 
         tree = get_command_tree()
@@ -219,14 +260,14 @@ class TestCommandTree:
     def test_cache(self) -> None:
         """Tree is cached and rebuilt on new registration."""
         @command("first.cmd", description="First")
-        def _f(flags, user=None):  # type: ignore
+        def _f(flags, positionals, user=None):  # type: ignore
             pass
 
         tree1 = get_command_tree()
         assert len(tree1) == 1
 
         @command("second.cmd", description="Second")
-        def _s(flags, user=None):  # type: ignore
+        def _s(flags, positionals, user=None):  # type: ignore
             pass
 
         tree2 = get_command_tree()

@@ -18,8 +18,18 @@ from typing import Any, Callable
 
 # ── In-memory registry ──────────────────────────────────────────────────
 
-HandlerFunc = Callable[[dict[str, str], dict[str, Any] | None], dict[str, Any]]
-"""Handler signature: ``(flags, user)`` where ``user`` is the authenticated user dict or None."""
+HandlerFunc = Callable[
+    [dict[str, str], list[str], dict[str, Any] | None],
+    dict[str, Any],
+]
+"""Handler signature: ``(flags, positionals, user)``.
+
+- ``flags``: dict of ``--key value`` parsed from the command line.
+- ``positionals``: positional tokens after the matched command path
+  (e.g. for ``!doi resolve 10.ronzz/abc`` with handler ``doi.resolve``,
+   positionals = ``["10.ronzz/abc"]``).
+- ``user``: authenticated user dict from the auth middleware, or None.
+"""
 
 _handlers: dict[str, HandlerFunc] = {}
 """Maps dot-separated command paths (e.g. ``"auth.api_key.list"``) to handler functions."""
@@ -45,7 +55,7 @@ def command(
     Usage::
 
         @command("auth.api_key.list", description="List all API keys")
-        def handler(flags):
+        def handler(flags, positionals, user):
             ...
     """
 
@@ -53,9 +63,10 @@ def command(
         @functools.wraps(func)
         def wrapper(
             flags: dict[str, str],
+            positionals: list[str],
             user: dict[str, Any] | None = None,
         ) -> dict[str, Any]:
-            return func(flags, user)
+            return func(flags, positionals, user)
 
         _handlers[path] = wrapper
         if description:
@@ -99,12 +110,40 @@ class CommandAmbiguousError(ValueError):
     """Raised when the command prefix matches multiple possible commands."""
 
 
+def _find_handler(
+    tokens: list[str],
+) -> tuple[str | None, int, HandlerFunc | None]:
+    """Find the longest matching handler for *tokens*.
+
+    Iterates from longest to shortest dot-separated path among *tokens*
+    and returns the first registered handler match.
+
+    Returns:
+        ``(matched_path, path_token_count, handler)``.
+        ``(None, 0, None)`` if no handler matches.
+    """
+    # Try longest path first (all tokens), then shorter prefixes
+    for end in range(len(tokens), 0, -1):
+        candidate = ".".join(tokens[:end])
+        handler = _handlers.get(candidate)
+        if handler is not None:
+            return candidate, end, handler
+    return None, 0, None
+
+
 def dispatch(
     tokens: list[str],
     flags: dict[str, str],
     user: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Dispatch a command to its registered handler.
+
+    Separates the command path from positional arguments::
+
+        !doi assign https://example.com --title Test
+        → command path: ["doi", "assign"]
+        → positionals:  ["https://example.com"]
+        → flags:        {"title": "Test"}
 
     Args:
         tokens: Command tokens, e.g. ``["auth", "api_key", "list"]``.
@@ -124,14 +163,14 @@ def dispatch(
     if not tokens:
         raise CommandNotFoundError("No command tokens provided")
 
-    # Build candidate paths: try the full path first, then walk parents
-    candidate = ".".join(tokens)
-    handler = _handlers.get(candidate)
+    cmd_path, cmd_len, handler = _find_handler(tokens)
 
     if handler is not None:
-        return handler(flags, user)
+        positionals = tokens[cmd_len:]
+        return handler(flags, positionals, user)
 
-    # Partial match: find all commands that start with the given prefix
+    # No exact match: check if the prefix is ambiguous
+    candidate = ".".join(tokens)
     prefix = candidate + "."
     matches = {p: _descriptions.get(p, "") for p in _handlers if p.startswith(prefix)}
 
@@ -142,12 +181,10 @@ def dispatch(
         )
 
     if len(matches) == 1:
-        # Auto-complete to the single match
         single_path = next(iter(matches))
         handler = _handlers[single_path]
-        return handler(flags, user)
+        return handler(flags, [], user)
 
-    # Multiple matches — show available subcommands
     raise CommandAmbiguousError(
         f"Ambiguous command: !{' '.join(tokens)}. "
         f"Available subcommands: {', '.join(sorted(matches.keys()))}. "

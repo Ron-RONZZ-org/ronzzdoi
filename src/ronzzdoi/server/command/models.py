@@ -43,7 +43,6 @@ class CommandResponse(BaseModel):
     type: str = Field(..., description="Display type: list, detail, form, error, success, confirm")
     title: str = Field(..., description="Tab title")
     data: Any = Field(default=None, description="Display data (dict, list, or null)")
-    id_key: str | None = Field(
-        default=None,
-        description="Dedup key — tabs with the same id_key replace each other",
-    )
+    # NOTE: id_key is NOT returned by the backend — it is derived on the frontend
+    # by commandExecutor.deriveIdKey(type, data, tokens). The backend is stateless
+    # regarding UI state and does not manage per-user tab deduplication.
