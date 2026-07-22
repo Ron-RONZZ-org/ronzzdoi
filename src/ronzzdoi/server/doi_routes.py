@@ -132,7 +132,7 @@ class DOIMergeRequest(BaseModel):
 @router.post("/api/v1/doi/merge")
 async def merge_dois(
     body: DOIMergeRequest,
-    user: dict[str, Any] = Depends(require_permission("full_access")),
+    user: dict[str, Any] = Depends(require_permission("edit")),
 ) -> dict[str, Any]:
     """Merge a source DOI into a target DOI.
 
@@ -194,7 +194,7 @@ async def search_dois(
 @router.post("/api/v1/doi", status_code=201)
 async def assign_doi(
     body: DOIAssignRequest,
-    user: dict[str, Any] = Depends(require_permission("full_access")),
+    user: dict[str, Any] = Depends(require_permission("edit")),
 ) -> dict[str, Any]:
     """Assign a new ronzzDOI."""
     svc = _get_doi_svc()
@@ -239,7 +239,7 @@ async def resolve_doi(
 async def modify_doi(
     doi: str,
     body: DOIModifyRequest,
-    user: dict[str, Any] = Depends(require_permission("full_access")),
+    user: dict[str, Any] = Depends(require_permission("edit")),
 ) -> dict[str, Any]:
     """Modify an existing DOI record."""
     svc = _get_doi_svc()
@@ -262,7 +262,7 @@ async def modify_doi(
 @router.delete("/api/v1/doi/{doi:path}", status_code=204)
 async def delete_doi(
     doi: str,
-    user: dict[str, Any] = Depends(require_permission("full_access")),
+    user: dict[str, Any] = Depends(require_permission("edit")),
 ) -> None:
     """Tombstone a DOI (soft-delete)."""
     svc = _get_doi_svc()

@@ -75,19 +75,19 @@ def seed_admin_user(auth_db: LighterDB, admin_user_id: str, admin_password: str)
 
 
 @pytest.fixture
-def admin_api_key_full(auth_db: LighterDB, seed_admin_user: dict[str, Any]) -> str:
-    """Create and return a full-access API key for the admin user.
+def admin_api_key_admin(auth_db: LighterDB, seed_admin_user: dict[str, Any]) -> str:
+    """Create and return an admin API key for the admin user.
 
     Returns the raw key string (usable in ``Authorization`` headers).
     """
     raw_key, prefix, hashed_key = generate_api_key()
     now = "2026-01-01T00:00:00+00:00"
-    key_id = "ak_test_full_" + secrets.token_hex(8)
+    key_id = "ak_test_admin_" + secrets.token_hex(8)
     auth_db.execute(
         "INSERT INTO api_keys (id, name, key, prefix, permission, "
         "created_at, updated_at, user_id) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (key_id, "test-full-access", hashed_key, prefix, "full_access", now, now, seed_admin_user["id"]),
+        (key_id, "test-admin", hashed_key, prefix, "admin", now, now, seed_admin_user["id"]),
     )
     return raw_key
 
@@ -160,35 +160,24 @@ def app(tmp_db_path: Path, auth_db: LighterDB) -> FastAPI:
     # Add test-only endpoints to exercise the middleware
     from fastapi import Depends
 
-    from ronzzdoi.server.auth_middleware import (
-        optional_read_access,
-        require_admin_role,
-        require_permission,
-        require_write_access,
-    )
+    from ronzzdoi.server.auth_middleware import require_permission
 
     @app.post("/api/test/write")
     async def test_write_endpoint(
-        user: dict[str, Any] = Depends(require_write_access),
+        user: dict[str, Any] = Depends(require_permission("edit")),
     ) -> dict[str, Any]:
         return {"user_id": user["id"], "role": user.get("role")}
 
-    @app.get("/api/test/read")
-    async def test_read_endpoint(
-        user: dict[str, Any] | None = Depends(optional_read_access),
-    ) -> dict[str, Any]:
-        return {"authenticated": user is not None}
-
     @app.get("/api/test/admin")
     async def test_admin_endpoint(
-        user: dict[str, Any] = Depends(require_admin_role),
+        user: dict[str, Any] = Depends(require_permission("admin")),
     ) -> dict[str, Any]:
         return {"user_id": user["id"], "role": user.get("role")}
 
     # Test endpoints for the require_permission factory (hierarchy-based)
-    @app.post("/api/test/require/full_access")
-    async def test_require_full_access(
-        user: dict[str, Any] = Depends(require_permission("full_access")),
+    @app.post("/api/test/require/admin")
+    async def test_require_admin(
+        user: dict[str, Any] = Depends(require_permission("admin")),
     ) -> dict[str, Any]:
         return {"user_id": user["id"], "role": user.get("role")}
 

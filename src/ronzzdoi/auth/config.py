@@ -23,19 +23,19 @@ PERMISSION_READ_ONLY = "read_only"
 PERMISSION_EDIT = "edit"
 """Edit API key — can create, modify, and delete resources."""
 
-PERMISSION_FULL_ACCESS = "full_access"
-"""Full-access API key — can create, modify, delete resources, and manage API keys."""
+PERMISSION_ADMIN = "admin"
+"""Admin API key — can create, modify, delete resources, and manage API keys."""
 
-WRITE_PERMISSIONS: list[str] = [PERMISSION_EDIT, PERMISSION_FULL_ACCESS]
-"""Permissions that allow write operations (edit or full_access)."""
+WRITE_PERMISSIONS: list[str] = [PERMISSION_EDIT, PERMISSION_ADMIN]
+"""Permissions that allow write operations (edit or admin)."""
 
-ALL_PERMISSIONS: list[str] = [PERMISSION_READ_ONLY, PERMISSION_EDIT, PERMISSION_FULL_ACCESS]
+ALL_PERMISSIONS: list[str] = [PERMISSION_READ_ONLY, PERMISSION_EDIT, PERMISSION_ADMIN]
 """All valid API key permissions."""
 
 PERMISSION_HIERARCHY: dict[str, int] = {
     PERMISSION_READ_ONLY: 0,
     PERMISSION_EDIT: 1,
-    PERMISSION_FULL_ACCESS: 2,
+    PERMISSION_ADMIN: 2,
 }
 """Numeric hierarchy for permission-level comparison (higher = more access)."""
 

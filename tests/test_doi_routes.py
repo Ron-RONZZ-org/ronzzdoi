@@ -86,13 +86,13 @@ class TestResolveEndpoint:
         assert resp.status_code == 401, resp.text
 
     def test_resolve_by_full_doi(
-        self, doi_client: TestClient, doi_crud_svc, admin_api_key_full: str
+        self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
     ) -> None:
         """Resolve by complete DOI string."""
         created = doi_crud_svc.assign("https://example.com", title="Test")
         resp = doi_client.get(
             f"/api/v1/doi/{created['doi']}",
-            headers=_auth_header(admin_api_key_full),
+            headers=_auth_header(admin_api_key_admin),
         )
         assert resp.status_code == 200, resp.text
         data = resp.json()
@@ -102,14 +102,14 @@ class TestResolveEndpoint:
         assert data["status"] == "active"
 
     def test_resolve_tombstoned(
-        self, doi_client: TestClient, doi_crud_svc, admin_api_key_full: str
+        self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
     ) -> None:
         """Tombstoned DOI returns record with deleted_at and status."""
         created = doi_crud_svc.assign("https://example.com")
         doi_crud_svc.delete_doi(created["doi"])
         resp = doi_client.get(
             f"/api/v1/doi/{created['doi']}",
-            headers=_auth_header(admin_api_key_full),
+            headers=_auth_header(admin_api_key_admin),
         )
         assert resp.status_code == 200, resp.text
         data = resp.json()
@@ -117,12 +117,12 @@ class TestResolveEndpoint:
         assert data["status"] == "tombstone"
 
     def test_nonexistent(
-        self, doi_client: TestClient, admin_api_key_full: str
+        self, doi_client: TestClient, admin_api_key_admin: str
     ) -> None:
         """Non-existent DOI → 404."""
         resp = doi_client.get(
             "/api/v1/doi/10.ronzz/00000000000000000000000000000000",
-            headers=_auth_header(admin_api_key_full),
+            headers=_auth_header(admin_api_key_admin),
         )
         assert resp.status_code == 404, resp.text
 
@@ -153,13 +153,13 @@ class TestAssignEndpoint:
         assert resp.status_code == 401, resp.text
 
     def test_assign_minimal(
-        self, doi_client: TestClient, admin_api_key_full: str
+        self, doi_client: TestClient, admin_api_key_admin: str
     ) -> None:
         """Assign with only target_url."""
         resp = doi_client.post(
             "/api/v1/doi",
             json={"target_url": "https://example.com"},
-            headers=_auth_header(admin_api_key_full),
+            headers=_auth_header(admin_api_key_admin),
         )
         assert resp.status_code == 201, resp.text
         data = resp.json()
@@ -169,7 +169,7 @@ class TestAssignEndpoint:
         assert data["doi_type"] == "external"
 
     def test_assign_full(
-        self, doi_client: TestClient, admin_api_key_full: str
+        self, doi_client: TestClient, admin_api_key_admin: str
     ) -> None:
         """Assign with all optional fields."""
         resp = doi_client.post(
@@ -180,7 +180,7 @@ class TestAssignEndpoint:
                 "title": "Test Book",
                 "metadata": {"author": "Test Author", "year": 2026},
             },
-            headers=_auth_header(admin_api_key_full),
+            headers=_auth_header(admin_api_key_admin),
         )
         assert resp.status_code == 201, resp.text
         data = resp.json()
@@ -190,7 +190,7 @@ class TestAssignEndpoint:
         assert data["metadata"]["author"] == "Test Author"
 
     def test_assign_entity_no_url(
-        self, doi_client: TestClient, admin_api_key_full: str
+        self, doi_client: TestClient, admin_api_key_admin: str
     ) -> None:
         """Assign an entity DOI without target_url."""
         resp = doi_client.post(
@@ -200,7 +200,7 @@ class TestAssignEndpoint:
                 "title": "Ada Lovelace",
                 "metadata": {"first_name": "Ada", "last_name": "Lovelace"},
             },
-            headers=_auth_header(admin_api_key_full),
+            headers=_auth_header(admin_api_key_admin),
         )
         assert resp.status_code == 201, resp.text
         data = resp.json()
@@ -253,14 +253,14 @@ class TestModifyEndpoint:
         assert resp.status_code == 401, resp.text
 
     def test_modify_title(
-        self, doi_client: TestClient, doi_crud_svc, admin_api_key_full: str
+        self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
     ) -> None:
         """Modify the title of a DOI."""
         created = doi_crud_svc.assign("https://example.com", title="Original")
         resp = doi_client.put(
             f"/api/v1/doi/{created['doi']}",
             json={"title": "Updated"},
-            headers=_auth_header(admin_api_key_full),
+            headers=_auth_header(admin_api_key_admin),
         )
         assert resp.status_code == 200, resp.text
         data = resp.json()
@@ -268,14 +268,14 @@ class TestModifyEndpoint:
         assert data["target_url"] == "https://example.com"
 
     def test_modify_url_creates_redirect(
-        self, doi_client: TestClient, doi_crud_svc, admin_api_key_full: str
+        self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
     ) -> None:
         """Changing target_url creates a redirect record."""
         created = doi_crud_svc.assign("https://original.com")
         resp = doi_client.put(
             f"/api/v1/doi/{created['doi']}",
             json={"target_url": "https://new.com"},
-            headers=_auth_header(admin_api_key_full),
+            headers=_auth_header(admin_api_key_admin),
         )
         assert resp.status_code == 200, resp.text
         data = resp.json()
@@ -284,13 +284,13 @@ class TestModifyEndpoint:
         assert data["redirect_history"][0]["old_url"] == "https://original.com"
 
     def test_modify_nonexistent(
-        self, doi_client: TestClient, admin_api_key_full: str
+        self, doi_client: TestClient, admin_api_key_admin: str
     ) -> None:
         """Modifying a non-existent DOI → 404."""
         resp = doi_client.put(
             "/api/v1/doi/10.ronzz/00000000000000000000000000000000",
             json={"title": "Nope"},
-            headers=_auth_header(admin_api_key_full),
+            headers=_auth_header(admin_api_key_admin),
         )
         assert resp.status_code == 404, resp.text
 
@@ -341,13 +341,13 @@ class TestDeleteEndpoint:
         assert resp.status_code == 401, resp.text
 
     def test_delete_active(
-        self, doi_client: TestClient, doi_crud_svc, admin_api_key_full: str
+        self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
     ) -> None:
         """Delete an active DOI → 204."""
         created = doi_crud_svc.assign("https://example.com")
         resp = doi_client.delete(
             f"/api/v1/doi/{created['doi']}",
-            headers=_auth_header(admin_api_key_full),
+            headers=_auth_header(admin_api_key_admin),
         )
         assert resp.status_code == 204, resp.text
         row = doi_crud_svc.db.execute_one(
@@ -356,12 +356,12 @@ class TestDeleteEndpoint:
         assert row["deleted_at"] is not None
 
     def test_delete_nonexistent(
-        self, doi_client: TestClient, admin_api_key_full: str
+        self, doi_client: TestClient, admin_api_key_admin: str
     ) -> None:
         """Delete a non-existent DOI → 404."""
         resp = doi_client.delete(
             "/api/v1/doi/10.ronzz/00000000000000000000000000000000",
-            headers=_auth_header(admin_api_key_full),
+            headers=_auth_header(admin_api_key_admin),
         )
         assert resp.status_code == 404, resp.text
 
@@ -411,7 +411,7 @@ class TestMergeEndpoint:
         assert resp.status_code == 401, resp.text
 
     def test_merge_simple(
-        self, doi_client: TestClient, doi_crud_svc, admin_api_key_full: str
+        self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
     ) -> None:
         """Merge source into target, source gets tombstoned."""
         source = doi_crud_svc.assign(
@@ -428,7 +428,7 @@ class TestMergeEndpoint:
                 "target_doi": target["doi"],
                 "delete_source": True,
             },
-            headers=_auth_header(admin_api_key_full),
+            headers=_auth_header(admin_api_key_admin),
         )
         assert resp.status_code == 200, resp.text
         data = resp.json()
@@ -439,7 +439,7 @@ class TestMergeEndpoint:
         assert source_record["deleted_at"] is not None
 
     def test_merge_nonexistent_source(
-        self, doi_client: TestClient, doi_crud_svc, admin_api_key_full: str
+        self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
     ) -> None:
         """Merge with non-existent source → 404."""
         target = doi_crud_svc.assign("https://target.com")
@@ -449,7 +449,7 @@ class TestMergeEndpoint:
                 "source_doi": "10.ronzz/00000000000000000000000000000000",
                 "target_doi": target["doi"],
             },
-            headers=_auth_header(admin_api_key_full),
+            headers=_auth_header(admin_api_key_admin),
         )
         assert resp.status_code == 404, resp.text
 
@@ -466,7 +466,7 @@ class TestSearchEndpoint:
         assert resp.status_code == 401, resp.text
 
     def test_search_by_type(
-        self, doi_client: TestClient, doi_crud_svc, admin_api_key_full: str
+        self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
     ) -> None:
         """Search by DOI type."""
         doi_crud_svc.assign("https://person.com", doi_type="person", title="Ada")
@@ -474,7 +474,7 @@ class TestSearchEndpoint:
 
         resp = doi_client.get(
             "/api/v1/doi/search?q=&doi_type=person",
-            headers=_auth_header(admin_api_key_full),
+            headers=_auth_header(admin_api_key_admin),
         )
         assert resp.status_code == 200, resp.text
         data = resp.json()
@@ -483,11 +483,11 @@ class TestSearchEndpoint:
             assert item["doi_type"] == "person"
 
     def test_search_empty(
-        self, doi_client: TestClient, admin_api_key_full: str
+        self, doi_client: TestClient, admin_api_key_admin: str
     ) -> None:
         """Empty database returns empty results."""
         resp = doi_client.get(
             "/api/v1/doi/search?q=test",
-            headers=_auth_header(admin_api_key_full),
+            headers=_auth_header(admin_api_key_admin),
         )
         assert resp.status_code == 200, resp.text

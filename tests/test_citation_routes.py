@@ -19,12 +19,12 @@ class TestCitationEndpoint:
         assert resp.status_code == 401, resp.text
 
     def test_list_styles(
-        self, doi_client: TestClient, admin_api_key_full: str
+        self, doi_client: TestClient, admin_api_key_admin: str
     ) -> None:
         """GET without style returns available styles."""
         resp = doi_client.get(
             "/api/v1/citation?doi=test",
-            headers=_auth_header(admin_api_key_full),
+            headers=_auth_header(admin_api_key_admin),
         )
         assert resp.status_code == 200, resp.text
         data = resp.json()
@@ -34,7 +34,7 @@ class TestCitationEndpoint:
         assert "json" in data["styles"]
 
     def test_format_apa(
-        self, doi_client: TestClient, doi_crud_svc, admin_api_key_full: str
+        self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
     ) -> None:
         """Format citation in APA style."""
         # Create a book DOI
@@ -51,7 +51,7 @@ class TestCitationEndpoint:
         )
         resp = doi_client.get(
             f"/api/v1/citation?doi={book['doi']}&style=apa",
-            headers=_auth_header(admin_api_key_full),
+            headers=_auth_header(admin_api_key_admin),
         )
         assert resp.status_code == 200, resp.text
         data = resp.json()
@@ -60,7 +60,7 @@ class TestCitationEndpoint:
         assert "The Great Book" in data["citation"]
 
     def test_format_unknown_style(
-        self, doi_client: TestClient, doi_crud_svc, admin_api_key_full: str
+        self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
     ) -> None:
         """Unknown style → 400."""
         book = doi_crud_svc.assign(
@@ -71,22 +71,22 @@ class TestCitationEndpoint:
         )
         resp = doi_client.get(
             f"/api/v1/citation?doi={book['doi']}&style=unknown_style",
-            headers=_auth_header(admin_api_key_full),
+            headers=_auth_header(admin_api_key_admin),
         )
         assert resp.status_code == 400, resp.text
 
     def test_format_nonexistent_doi(
-        self, doi_client: TestClient, admin_api_key_full: str
+        self, doi_client: TestClient, admin_api_key_admin: str
     ) -> None:
         """Non-existent DOI → 404."""
         resp = doi_client.get(
             "/api/v1/citation?doi=10.ronzz/00000000000000000000000000000000&style=apa",
-            headers=_auth_header(admin_api_key_full),
+            headers=_auth_header(admin_api_key_admin),
         )
         assert resp.status_code == 404, resp.text
 
     def test_format_with_suffix_only(
-        self, doi_client: TestClient, doi_crud_svc, admin_api_key_full: str
+        self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
     ) -> None:
         """DOI as suffix (without prefix) is auto-completed."""
         book = doi_crud_svc.assign(
@@ -99,7 +99,7 @@ class TestCitationEndpoint:
         suffix = book["doi"].replace("10.ronzz/", "")
         resp = doi_client.get(
             f"/api/v1/citation?doi={suffix}&style=apa",
-            headers=_auth_header(admin_api_key_full),
+            headers=_auth_header(admin_api_key_admin),
         )
         # This may fail if the formatter doesn't find the DOI with suffix only
         # Since _normalize_doi prepends 10.ronzz/ when missing, this should work
