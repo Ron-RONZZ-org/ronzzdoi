@@ -283,6 +283,24 @@ class TestModifyEndpoint:
         assert len(data["redirect_history"]) == 1
         assert data["redirect_history"][0]["old_url"] == "https://original.com"
 
+    def test_modify_with_redirect_note(
+        self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
+    ) -> None:
+        """``redirect_note`` is recorded in the redirect entry."""
+        created = doi_crud_svc.assign("https://original.com")
+        resp = doi_client.put(
+            f"/api/v1/doi/{created['doi']}",
+            json={
+                "target_url": "https://new.com",
+                "redirect_note": "Moved to new server",
+            },
+            headers=_auth_header(admin_api_key_admin),
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert len(data["redirect_history"]) == 1
+        assert data["redirect_history"][0]["note"] == "Moved to new server"
+
     def test_modify_nonexistent(
         self, doi_client: TestClient, admin_api_key_admin: str
     ) -> None:
@@ -394,6 +412,97 @@ class TestDeleteEndpoint:
             headers=_auth_header(raw_key),
         )
         assert resp.status_code == 403, resp.text
+
+
+# ── Test: GET /api/v1/doi (list) ────────────────────────────────────────────
+
+
+class TestListEndpoint:
+    """``GET /api/v1/doi`` — list DOI records."""
+
+    def test_unauthenticated(self, doi_client: TestClient) -> None:
+        """GET without auth → 401."""
+        resp = doi_client.get("/api/v1/doi")
+        assert resp.status_code == 401, resp.text
+
+    def test_list_active_only(
+        self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
+    ) -> None:
+        """By default, only active (non-tombstoned) DOIs are returned."""
+        doi_crud_svc.assign("https://active.com", title="Active One")
+        doi_crud_svc.assign("https://active2.com", title="Active Two")
+        doomed = doi_crud_svc.assign("https://doomed.com")
+        doi_crud_svc.delete_doi(doomed["doi"])
+
+        resp = doi_client.get(
+            "/api/v1/doi",
+            headers=_auth_header(admin_api_key_admin),
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        dois = {item["doi"]: item for item in data["items"]}
+        assert doomed["doi"] not in dois, "tombstoned DOI should be excluded"
+        assert all(not item.get("deleted_at") for item in data["items"])
+
+    def test_list_include_deleted(
+        self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
+    ) -> None:
+        """``include_deleted=true`` includes tombstoned DOIs."""
+        alive = doi_crud_svc.assign("https://alive.com")
+        doomed = doi_crud_svc.assign("https://doomed.com")
+        doi_crud_svc.delete_doi(doomed["doi"])
+
+        resp = doi_client.get(
+            "/api/v1/doi",
+            params={"include_deleted": "true"},
+            headers=_auth_header(admin_api_key_admin),
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        dois = {item["doi"]: item for item in data["items"]}
+        assert alive["doi"] in dois
+        assert doomed["doi"] in dois
+        assert dois[doomed["doi"]]["deleted_at"] is not None
+
+    def test_list_filter_by_type(
+        self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
+    ) -> None:
+        """``doi_type`` filter returns only matching type."""
+        doi_crud_svc.assign("https://book.com", doi_type="book")
+        doi_crud_svc.assign("https://page.com", doi_type="webpage")
+
+        resp = doi_client.get(
+            "/api/v1/doi",
+            params={"doi_type": "webpage"},
+            headers=_auth_header(admin_api_key_admin),
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert all(item["doi_type"] == "webpage" for item in data["items"])
+
+    def test_list_empty(
+        self, doi_client: TestClient, admin_api_key_admin: str
+    ) -> None:
+        """Empty database returns empty list."""
+        resp = doi_client.get(
+            "/api/v1/doi",
+            headers=_auth_header(admin_api_key_admin),
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["items"] == []
+        assert data["total"] == 0
+
+    def test_list_readonly_allowed(
+        self, doi_client: TestClient, doi_crud_svc, admin_api_key_readonly: str
+    ) -> None:
+        """Read-only keys can list DOIs."""
+        doi_crud_svc.assign("https://ex.com")
+        resp = doi_client.get(
+            "/api/v1/doi",
+            headers=_auth_header(admin_api_key_readonly),
+        )
+        assert resp.status_code == 200, resp.text
 
 
 # ── Test: POST /api/v1/doi/merge (merge) ──────────────────────────────────

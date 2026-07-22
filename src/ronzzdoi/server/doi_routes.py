@@ -154,6 +154,30 @@ async def merge_dois(
     return _record_to_response(result, include_status=True)
 
 
+@router.get("/api/v1/doi")
+async def list_dois(
+    doi_type: str = "",
+    include_deleted: bool = False,
+    limit: int = 20,
+    offset: int = 0,
+    user: dict[str, Any] = Depends(require_permission("read_only")),
+) -> dict[str, Any]:
+    """List DOI records with optional type filter.
+
+    By default only active (non-tombstoned) DOIs are returned.
+    """
+    svc = _get_doi_svc()
+    results = svc.list_dois(limit=limit, offset=offset, include_deleted=include_deleted)
+    if doi_type:
+        results = [r for r in results if r.get("doi_type") == doi_type]
+    return {
+        "items": [_record_to_response(r) for r in results],
+        "total": len(results),
+        "limit": limit,
+        "offset": offset,
+    }
+
+
 @router.get("/api/v1/doi/search")
 async def search_dois(
     q: str = "",
@@ -250,6 +274,7 @@ async def modify_doi(
             title=body.title,
             doi_type=body.doi_type,
             metadata=body.metadata,
+            redirect_note=body.redirect_note,
         )
     except DOINotFoundError as exc:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=str(exc))

@@ -50,6 +50,10 @@ class DOIModifyRequest(BaseModel):
     title: str | None = None
     doi_type: str | None = None
     metadata: dict[str, Any] | None = None
+    redirect_note: str = Field(
+        default="",
+        description="Optional note recorded with the redirect entry",
+    )
 
 
 class DOIResponse(BaseModel):
