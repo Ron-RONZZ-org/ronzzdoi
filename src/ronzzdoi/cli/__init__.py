@@ -19,10 +19,10 @@ import sys
 from typing import Any
 
 from ronzzdoi.cli.client import (
+    AccessDeniedError,
     AuthenticationError,
     ClientError,
     ConnectionError_,
-    PermissionError_,
     RonzzdoiClient,
     ServerError,
 )
@@ -105,7 +105,7 @@ def main() -> None:
             "Authentication failed. Check your API key."
         )
         sys.exit(1)
-    except PermissionError_ as exc:
+    except AccessDeniedError as exc:
         _print_error(
             f"Permission denied. Your API key requires higher permission. "
             f"({exc})"

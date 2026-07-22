@@ -11,40 +11,9 @@ import json
 from typing import Any
 
 from ronzzdoi.doi.exceptions import DOIAmbiguousError, DOIExistsError, DOIInvalidError, DOINotFoundError
+from ronzzdoi.server.command.handlers import check_permission
 from ronzzdoi.server.command.registry import command
-from ronzzdoi.server.doi_routes import _get_doi_svc, _record_to_response
-from ronzzdoi.auth.config import PERMISSION_HIERARCHY
-
-
-# ── Permission helper ───────────────────────────────────────────────────
-
-
-def _check_permission(
-    user: dict[str, Any] | None,
-    min_permission: str,
-) -> dict[str, Any] | None:
-    """Check user has at least *min_permission*.
-
-    Returns an error response dict if insufficient, ``None`` if OK.
-    """
-    actual = user.get("api_key_permission") if user else None
-    if not actual:
-        return {
-            "type": "error",
-            "title": "Authentication Required",
-            "data": {"message": "Valid API key required."},
-        }
-    min_level = PERMISSION_HIERARCHY.get(min_permission, 0)
-    actual_level = PERMISSION_HIERARCHY.get(actual, -1)
-    if actual_level < min_level:
-        return {
-            "type": "error",
-            "title": "Permission Denied",
-            "data": {
-                "message": f"Insufficient permissions. Requires at least '{min_permission}'.",
-            },
-        }
-    return None
+from ronzzdoi.server.doi_routes import _get_doi_svc, _record_to_response, _search_svc
 
 
 # ── doi.assign ──────────────────────────────────────────────────────────
@@ -64,7 +33,7 @@ def doi_assign(
 
     Missing required params → returns ``form`` response.
     """
-    perm = _check_permission(user, "edit")
+    perm = check_permission(user, "edit")
     if perm:
         return perm
 
@@ -133,7 +102,7 @@ def doi_resolve(
 
         !doi resolve <doi>
     """
-    perm = _check_permission(user, "read_only")
+    perm = check_permission(user, "read_only")
     if perm:
         return perm
 
@@ -180,7 +149,7 @@ def doi_modify(
 
         !doi modify <doi> [--url ... --title '{"en":"..."}' --type ... --metadata '{}']
     """
-    perm = _check_permission(user, "edit")
+    perm = check_permission(user, "edit")
     if perm:
         return perm
 
@@ -245,7 +214,7 @@ def doi_merge(
 
         !doi merge <source-doi> <target-doi>
     """
-    perm = _check_permission(user, "edit")
+    perm = check_permission(user, "edit")
     if perm:
         return perm
 
@@ -289,7 +258,7 @@ def doi_delete(
 
         !doi delete <doi>
     """
-    perm = _check_permission(user, "edit")
+    perm = check_permission(user, "edit")
     if perm:
         return perm
 
@@ -337,7 +306,7 @@ def doi_search(
         !doi search <query> [--limit 20 --offset 0 --mode semantical]
         !doi search  (lists all DOIs)
     """
-    perm = _check_permission(user, "read_only")
+    perm = check_permission(user, "read_only")
     if perm:
         return perm
 
@@ -346,9 +315,6 @@ def doi_search(
     offset = int(flags.get("offset", "0"))
 
     svc = _get_doi_svc()
-
-    # Try to import search service from doi_routes
-    from ronzzdoi.server.doi_routes import _search_svc
 
     if query:
         if _search_svc is not None:

@@ -11,40 +11,10 @@ from typing import Any
 
 from lighterauth.api_key import generate_api_key, lookup_api_keys
 
-from ronzzdoi.auth.config import ALL_PERMISSIONS, PERMISSION_HIERARCHY
+from ronzzdoi.auth.config import ALL_PERMISSIONS
+from ronzzdoi.server.command.handlers import check_permission
 from ronzzdoi.server.command.registry import command
 from ronzzdoi.server import auth_routes as _auth_routes
-
-
-# ── Permission helper ───────────────────────────────────────────────────
-
-
-def _check_permission(
-    user: dict[str, Any] | None,
-    min_permission: str,
-) -> dict[str, Any] | None:
-    """Check user has at least *min_permission*.
-
-    Returns an error response dict if insufficient, ``None`` if OK.
-    """
-    actual = user.get("api_key_permission") if user else None
-    if not actual:
-        return {
-            "type": "error",
-            "title": "Authentication Required",
-            "data": {"message": "Valid API key required."},
-        }
-    min_level = PERMISSION_HIERARCHY.get(min_permission, 0)
-    actual_level = PERMISSION_HIERARCHY.get(actual, -1)
-    if actual_level < min_level:
-        return {
-            "type": "error",
-            "title": "Permission Denied",
-            "data": {
-                "message": f"Insufficient permissions. Requires at least '{min_permission}'.",
-            },
-        }
-    return None
 
 
 def _ensure_db() -> None:
@@ -68,7 +38,7 @@ def auth_api_key_list(
 
         !auth api_key list [--include-expired]
     """
-    perm = _check_permission(user, "admin")
+    perm = check_permission(user, "admin")
     if perm:
         return perm
 
@@ -116,7 +86,7 @@ def auth_api_key_create(
 
         !auth api_key create --name <name> --permission read_only|edit|admin [--expires-at <iso>]
     """
-    perm = _check_permission(user, "admin")
+    perm = check_permission(user, "admin")
     if perm:
         return perm
 
@@ -202,7 +172,7 @@ def auth_api_key_update(
 
         !auth api_key update <id> [--name ... --permission ... --expires-at ...]
     """
-    perm = _check_permission(user, "admin")
+    perm = check_permission(user, "admin")
     if perm:
         return perm
 
@@ -306,7 +276,7 @@ def auth_api_key_delete(
 
         !auth api_key delete <id>
     """
-    perm = _check_permission(user, "admin")
+    perm = check_permission(user, "admin")
     if perm:
         return perm
 

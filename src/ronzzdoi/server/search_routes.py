@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from fastapi import APIRouter, Depends
-from starlette.status import HTTP_501_NOT_IMPLEMENTED
+from fastapi import APIRouter, Depends, HTTPException
+from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY, HTTP_501_NOT_IMPLEMENTED
 
 from ronzzdoi.db.service import DOIService
 from ronzzdoi.server.auth_middleware import require_permission
@@ -77,7 +77,10 @@ async def search(
 
     # Validate mode
     if mode not in ("fts", "semantic"):
-        mode = "fts"
+        raise HTTPException(
+            status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid search mode '{mode}'. Must be 'fts' or 'semantic'.",
+        )
 
     results = svc.search(q, mode=mode, limit=limit)
 

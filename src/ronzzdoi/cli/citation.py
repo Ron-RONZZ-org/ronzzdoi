@@ -30,7 +30,7 @@ def register_subparser(subparsers: argparse._SubParsersAction) -> None:
     show_parser.add_argument(
         "--style",
         default="apa",
-        choices=["apa", "vancouver", "mla", "chicago", "bibtex", "json"],
+        choices=["apa", "vancouver", "json"],
         help="Citation style (default: apa)",
     )
     show_parser.set_defaults(func=_cmd_show)

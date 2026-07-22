@@ -32,7 +32,7 @@ from slowapi.util import get_remote_address
 from starlette.status import HTTP_400_BAD_REQUEST, HTTP_404_NOT_FOUND
 
 from ronzzdoi.citation import CitationFormatter
-from ronzzdoi.doi.exceptions import DOINotFoundError
+from ronzzdoi.doi.exceptions import DOIAmbiguousError
 from ronzzdoi.doi.service import DOIService
 from ronzzdoi.db.service import DOIService as DBDOIService
 from ronzzdoi.server.public_schemas import (
@@ -189,8 +189,8 @@ async def public_resolve_doi(doi: str, request: Request) -> dict[str, Any]:
     svc = _get_doi_svc()
     try:
         record = svc.resolve(doi)
-    except Exception:
-        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail=f"Invalid DOI: '{doi}'")
+    except DOIAmbiguousError as exc:
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail=str(exc))
 
     if record is None:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=f"DOI '{doi}' not found.")

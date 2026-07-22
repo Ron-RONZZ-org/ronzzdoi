@@ -11,10 +11,10 @@ import httpx
 import pytest
 
 from ronzzdoi.cli.client import (
+    AccessDeniedError,
     AuthenticationError,
     ClientError,
     ConnectionError_,
-    PermissionError_,
     RonzzdoiClient,
     ServerError,
 )
@@ -79,9 +79,9 @@ def test_401_authentication_error() -> None:
 
 
 def test_403_permission_error() -> None:
-    """403 raises PermissionError_."""
+    """403 raises AccessDeniedError."""
     client = RonzzdoiClient(api_key="ro-key", client=httpx.Client(transport=_error_transport(403, "Insufficient permission")))
-    with pytest.raises(PermissionError_, match="Insufficient permission"):
+    with pytest.raises(AccessDeniedError, match="Insufficient permission"):
         client.get("/api/v1/doi")
 
 

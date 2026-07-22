@@ -9,40 +9,9 @@ from __future__ import annotations
 from typing import Any
 
 from ronzzdoi.doi.exceptions import DOINotFoundError
+from ronzzdoi.server.command.handlers import check_permission
 from ronzzdoi.server.command.registry import command
 from ronzzdoi.server.citation_routes import _get_formatter
-from ronzzdoi.auth.config import PERMISSION_HIERARCHY
-
-
-# ── Permission helper ───────────────────────────────────────────────────
-
-
-def _check_permission(
-    user: dict[str, Any] | None,
-    min_permission: str,
-) -> dict[str, Any] | None:
-    """Check user has at least *min_permission*.
-
-    Returns an error response dict if insufficient, ``None`` if OK.
-    """
-    actual = user.get("api_key_permission") if user else None
-    if not actual:
-        return {
-            "type": "error",
-            "title": "Authentication Required",
-            "data": {"message": "Valid API key required."},
-        }
-    min_level = PERMISSION_HIERARCHY.get(min_permission, 0)
-    actual_level = PERMISSION_HIERARCHY.get(actual, -1)
-    if actual_level < min_level:
-        return {
-            "type": "error",
-            "title": "Permission Denied",
-            "data": {
-                "message": f"Insufficient permissions. Requires at least '{min_permission}'.",
-            },
-        }
-    return None
 
 
 # ── citation.show ───────────────────────────────────────────────────────
@@ -60,7 +29,7 @@ def citation_show(
 
         !citation show <doi> [--style apa]
     """
-    perm = _check_permission(user, "read_only")
+    perm = check_permission(user, "read_only")
     if perm:
         return perm
 
@@ -112,7 +81,7 @@ def citation_styles(
 
         !citation styles <doi>
     """
-    perm = _check_permission(user, "read_only")
+    perm = check_permission(user, "read_only")
     if perm:
         return perm
 

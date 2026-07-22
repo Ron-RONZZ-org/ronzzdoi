@@ -20,11 +20,8 @@ class AuthenticationError(RonzzdoiError):
     """Raised on 401 — invalid or missing API key."""
 
 
-class PermissionError_(RonzzdoiError):
-    """Raised on 403 — API key lacks required permission.
-
-    Named with trailing underscore to avoid shadowing the built-in.
-    """
+class AccessDeniedError(RonzzdoiError):
+    """Raised on 403 — API key lacks required permission."""
 
 
 class ConnectionError_(RonzzdoiError):
@@ -41,7 +38,7 @@ class ClientError(RonzzdoiError):
 
 _ERROR_MAP: dict[int, type[RonzzdoiError]] = {
     401: AuthenticationError,
-    403: PermissionError_,
+    403: AccessDeniedError,
 }
 
 
@@ -88,7 +85,7 @@ class RonzzdoiClient:
 
         Raises:
             AuthenticationError: On 401.
-            PermissionError_: On 403.
+            AccessDeniedError: On 403.
             ClientError: On other 4xx.
             ServerError: On 5xx.
             ConnectionError_: On connection failure.
@@ -155,7 +152,7 @@ __all__ = [
     "RonzzdoiClient",
     "RonzzdoiError",
     "AuthenticationError",
-    "PermissionError_",
+    "AccessDeniedError",
     "ConnectionError_",
     "ServerError",
     "ClientError",
