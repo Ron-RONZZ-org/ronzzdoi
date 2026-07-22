@@ -32,6 +32,7 @@ dev = [
 ]
 
 [project.scripts]
+ronzzdoi = "ronzzdoi.cli:_entry_point"
 ronzzdoi-dev = "ronzzdoi.scripts.dev_cli:dev_main"
 
 [tool.hatch.build.targets.wheel]
