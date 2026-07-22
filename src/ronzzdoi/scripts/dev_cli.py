@@ -1,11 +1,157 @@
 """Dev CLI entry point for ronzzdoi.
 
-Usage: ronzzdoi-dev [--seed] [--data-dir PATH]
+Provides ``ronzzdoi-dev`` command with options for port, data directory,
+and seed data.
+
+Usage::
+
+    ronzzdoi-dev --port 8080 --seed
+    ronzzdoi-dev --data-dir /tmp/ronzzdoi-dev --seed
 """
 
 from __future__ import annotations
 
+import argparse
+import sys
+
+from lighterauth.password import hash_password
+
 
 def dev_main() -> None:
-    """Development server entry point (placeholder)."""
-    print("ronzzdoi-dev: not yet implemented")
+    """Development server entry point."""
+    parser = argparse.ArgumentParser(prog="ronzzdoi-dev", description="ronzzdoi development server")
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Server port (default: 8000)",
+    )
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="127.0.0.1",
+        help="Bind address (default: 127.0.0.1)",
+    )
+    parser.add_argument(
+        "--data-dir",
+        type=str,
+        default=None,
+        help="Data directory path (default: XDG-compliant path)",
+    )
+    parser.add_argument(
+        "--seed",
+        action="store_true",
+        help="Seed the database with an admin user for development",
+    )
+
+    args = parser.parse_args()
+
+    # Create the app
+    try:
+        from ronzzdoi.server.app import create_app
+
+        app = create_app(data_dir=args.data_dir)
+    except Exception as exc:
+        print(f"Failed to create app: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    # Seed if requested
+    if args.seed:
+        _seed_data(args.data_dir)
+
+    # Start uvicorn
+    try:
+        import uvicorn
+
+        print(f"Starting ronzzdoi dev server on {args.host}:{args.port}")
+        print(f"API docs: http://{args.host}:{args.port}/api/docs")
+        uvicorn.run(app, host=args.host, port=args.port)
+    except ImportError:
+        print("uvicorn is required. Install with: uv pip install uvicorn", file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\nServer stopped.")
+        sys.exit(0)
+
+
+def _seed_data(data_dir: str | None) -> None:
+    """Seed the database with an admin user for development.
+
+    Creates:
+    - An admin user (admin@ronzz.org / admin123)
+    - A full-access API key for the admin user
+    - A read-only API key for the admin user
+
+    Uses the same auth database path resolution as ``create_app``.
+    """
+    from lighterauth.api_key import generate_api_key
+    from lighterauth.db import init_auth_schema
+    from lightercore.db import LighterDB
+
+    from ronzzdoi.auth.config import resolve_auth_db_path
+
+    db_path = resolve_auth_db_path(data_dir)
+    db = LighterDB(str(db_path))
+    init_auth_schema(db)
+
+    # Check if seed already exists
+    existing = db.execute_one("SELECT id FROM users WHERE email = ?", ("admin@ronzz.org",))
+    if existing:
+        print("Seed data already exists, skipping.")
+        return
+
+    import secrets
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Create admin user
+    user_id = "user_dev_admin_001"
+    hashed = hash_password("admin123")
+    db.execute(
+        "INSERT INTO users (id, email, username, password, role, status, "
+        "created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (user_id, "admin@ronzz.org", "admin", hashed, "administrator", "active", now, now),
+    )
+
+    # Create full-access API key
+    raw_full, prefix_full, hashed_full = generate_api_key()
+    db.execute(
+        "INSERT INTO api_keys (id, name, key, prefix, permission, "
+        "created_at, updated_at, user_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            "ak_seed_full_" + secrets.token_hex(8),
+            "dev-full-access",
+            hashed_full,
+            prefix_full,
+            "full_access",
+            now,
+            now,
+            user_id,
+        ),
+    )
+
+    # Create read-only API key
+    raw_ro, prefix_ro, hashed_ro = generate_api_key()
+    db.execute(
+        "INSERT INTO api_keys (id, name, key, prefix, permission, "
+        "created_at, updated_at, user_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            "ak_seed_ro_" + secrets.token_hex(8),
+            "dev-read-only",
+            hashed_ro,
+            prefix_ro,
+            "read_only",
+            now,
+            now,
+            user_id,
+        ),
+    )
+
+    print(f"Seed data created:")
+    print(f"  Admin user: admin@ronzz.org / admin123")
+    print(f"  Full-access API key: {raw_full}")
+    print(f"  Read-only API key:   {raw_ro}")

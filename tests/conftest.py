@@ -1,4 +1,4 @@
-"""Shared test fixtures for auth module tests."""
+"""Shared test fixtures for auth module and API integration tests."""
 
 from __future__ import annotations
 
@@ -185,7 +185,7 @@ def app(tmp_db_path: Path, auth_db: LighterDB) -> FastAPI:
     ) -> dict[str, Any]:
         return {"user_id": user["id"], "role": user.get("role")}
 
-    # Test endpoints for the require_permission factory
+    # Test endpoints for the require_permission factory (hierarchy-based)
     @app.post("/api/test/require/full_access")
     async def test_require_full_access(
         user: dict[str, Any] = Depends(require_permission("full_access")),
@@ -211,4 +211,119 @@ def app(tmp_db_path: Path, auth_db: LighterDB) -> FastAPI:
 def client(app: FastAPI) -> Iterator[TestClient]:
     """Return a TestClient bound to the test app."""
     with TestClient(app) as c:
+        yield c
+
+
+# ── ronzzdoi database fixtures (for DOI/citation/search tests) ──────────
+
+
+DOI_SCHEMA: dict[str, str] = {
+    "dois": """
+        CREATE TABLE dois (
+            doi           TEXT PRIMARY KEY,
+            target_url    TEXT,
+            title         TEXT DEFAULT '',
+            doi_type      TEXT NOT NULL DEFAULT 'external',
+            metadata_json TEXT DEFAULT '{}',
+            created_at    TEXT NOT NULL,
+            updated_at    TEXT NOT NULL,
+            deleted_at    TEXT
+        )
+    """,
+    "redirects": """
+        CREATE TABLE redirects (
+            redirect_id TEXT PRIMARY KEY,
+            doi         TEXT NOT NULL REFERENCES dois(doi) ON DELETE CASCADE,
+            old_url     TEXT NOT NULL,
+            note        TEXT DEFAULT '',
+            created_at  TEXT NOT NULL
+        )
+    """,
+}
+
+
+@pytest.fixture
+def ronzzdoi_db_path(tmp_path: Path) -> Path:
+    """Return a temporary path for the ronzzdoi database."""
+    return tmp_path / "ronzzdoi.db"
+
+
+@pytest.fixture
+def ronzzdoi_db(ronzzdoi_db_path: Path) -> Iterator[LighterDB]:
+    """Create and yield a ronzzdoi database with DOI schema."""
+    db = LighterDB(str(ronzzdoi_db_path))
+    db.init_schema(DOI_SCHEMA)
+    yield db
+    db.close()
+
+
+@pytest.fixture
+def doi_crud_svc(ronzzdoi_db: LighterDB):
+    """Create a DOI CRUD service from ronzzdoi.doi.service."""
+    from ronzzdoi.doi.service import DOIService
+
+    return DOIService(ronzzdoi_db)
+
+
+@pytest.fixture
+def citation_formatter(doi_crud_svc):
+    """Create a CitationFormatter bound to the DOI CRUD service."""
+    from ronzzdoi.citation import CitationFormatter
+
+    return CitationFormatter(doi_crud_svc)
+
+
+@pytest.fixture
+def doi_app(
+    tmp_db_path: Path,
+    auth_db: LighterDB,
+    ronzzdoi_db: LighterDB,
+    doi_crud_svc,
+    citation_formatter,
+) -> FastAPI:
+    """Build a FastAPI app with auth + DOI + citation + search routes.
+
+    Uses the same auth database and middleware as the ``app`` fixture,
+    but additionally mounts DOI, citation, and search routes.
+
+    Useful for DOI/citation/search endpoint integration tests.
+    """
+    from fastapi import FastAPI
+    from fastapi.middleware.cors import CORSMiddleware
+
+    from ronzzdoi.server.auth_middleware import init_auth_deps
+    from ronzzdoi.server.auth_routes import mount_auth_routes
+    from ronzzdoi.server.citation_routes import mount_citation_routes
+    from ronzzdoi.server.command_routes import mount_command_routes
+    from ronzzdoi.server.doi_routes import mount_doi_routes
+    from ronzzdoi.server.search_routes import mount_search_routes
+
+    auth = Lighterauth(auth_db)
+    init_auth_deps(auth)
+
+    app = FastAPI(title="ronzzdoi-test", version="0.0.0")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    mount_auth_routes(app, auth_db)
+    mount_command_routes(app)
+    mount_doi_routes(app, doi_svc=doi_crud_svc)
+    mount_citation_routes(app, citation_formatter)
+
+    # Register DOI redirect (must be last)
+    from ronzzdoi.server.doi_routes import register_doi_redirect
+    register_doi_redirect(app)
+
+    return app
+
+
+@pytest.fixture
+def doi_client(doi_app: FastAPI) -> Iterator[TestClient]:
+    """Return a TestClient bound to the DOI-enabled test app."""
+    with TestClient(doi_app) as c:
         yield c
