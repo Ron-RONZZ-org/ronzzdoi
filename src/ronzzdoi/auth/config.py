@@ -20,14 +20,24 @@ DEFAULT_AUTH_DB_NAME = "auth.db"
 PERMISSION_READ_ONLY = "read_only"
 """Read-only API key — can query public endpoints with higher rate limits."""
 
+PERMISSION_EDIT = "edit"
+"""Edit API key — can create, modify, and delete resources."""
+
 PERMISSION_FULL_ACCESS = "full_access"
-"""Full-access API key — can create, modify, and delete resources."""
+"""Full-access API key — can create, modify, delete resources, and manage API keys."""
 
-WRITE_PERMISSIONS: list[str] = [PERMISSION_FULL_ACCESS]
-"""Permissions that allow write operations."""
+WRITE_PERMISSIONS: list[str] = [PERMISSION_EDIT, PERMISSION_FULL_ACCESS]
+"""Permissions that allow write operations (edit or full_access)."""
 
-ALL_PERMISSIONS: list[str] = [PERMISSION_READ_ONLY, PERMISSION_FULL_ACCESS]
+ALL_PERMISSIONS: list[str] = [PERMISSION_READ_ONLY, PERMISSION_EDIT, PERMISSION_FULL_ACCESS]
 """All valid API key permissions."""
+
+PERMISSION_HIERARCHY: dict[str, int] = {
+    PERMISSION_READ_ONLY: 0,
+    PERMISSION_EDIT: 1,
+    PERMISSION_FULL_ACCESS: 2,
+}
+"""Numeric hierarchy for permission-level comparison (higher = more access)."""
 
 
 def resolve_auth_db_path(data_dir: str | Path | None = None) -> Path:

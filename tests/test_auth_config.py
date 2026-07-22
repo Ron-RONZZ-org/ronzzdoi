@@ -9,7 +9,9 @@ from ronzzdoi.auth.config import (
     ALL_PERMISSIONS,
     API_KEY_PREFIX,
     AUTH_HEADER_SCHEME,
+    PERMISSION_EDIT,
     PERMISSION_FULL_ACCESS,
+    PERMISSION_HIERARCHY,
     PERMISSION_READ_ONLY,
     WRITE_PERMISSIONS,
     get_auth_config,
@@ -23,17 +25,37 @@ class TestPermissionConstants:
     def test_read_only_value(self) -> None:
         assert PERMISSION_READ_ONLY == "read_only"
 
+    def test_edit_value(self) -> None:
+        assert PERMISSION_EDIT == "edit"
+
     def test_full_access_value(self) -> None:
         assert PERMISSION_FULL_ACCESS == "full_access"
 
-    def test_write_permissions_only_full_access(self) -> None:
-        """Only ``full_access`` grants write capability."""
-        assert WRITE_PERMISSIONS == [PERMISSION_FULL_ACCESS]
+    def test_write_permissions_edit_and_full(self) -> None:
+        """``edit`` and ``full_access`` grant write capability."""
+        assert set(WRITE_PERMISSIONS) == {PERMISSION_EDIT, PERMISSION_FULL_ACCESS}
         assert PERMISSION_READ_ONLY not in WRITE_PERMISSIONS
 
-    def test_all_permissions_both(self) -> None:
-        """All permissions includes both roles."""
-        assert set(ALL_PERMISSIONS) == {PERMISSION_READ_ONLY, PERMISSION_FULL_ACCESS}
+    def test_all_permissions_three_tiers(self) -> None:
+        """All permissions includes all three tiers."""
+        assert set(ALL_PERMISSIONS) == {
+            PERMISSION_READ_ONLY,
+            PERMISSION_EDIT,
+            PERMISSION_FULL_ACCESS,
+        }
+
+    def test_permission_hierarchy_structure(self) -> None:
+        """Hierarchy maps each permission to a numeric level."""
+        assert PERMISSION_HIERARCHY == {
+            "read_only": 0,
+            "edit": 1,
+            "full_access": 2,
+        }
+
+    def test_permission_hierarchy_ordering(self) -> None:
+        """Hierarchy levels increase with access rights."""
+        assert PERMISSION_HIERARCHY[PERMISSION_READ_ONLY] < PERMISSION_HIERARCHY[PERMISSION_EDIT]
+        assert PERMISSION_HIERARCHY[PERMISSION_EDIT] < PERMISSION_HIERARCHY[PERMISSION_FULL_ACCESS]
 
 
 class TestHeaderConstants:

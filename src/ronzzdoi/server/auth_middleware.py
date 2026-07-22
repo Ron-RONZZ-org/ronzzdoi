@@ -15,14 +15,14 @@ Usage::
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 from fastapi import Header, HTTPException
 from starlette.status import HTTP_403_FORBIDDEN
 
 from lighterauth.middleware import Lighterauth
 
-from ronzzdoi.auth.config import WRITE_PERMISSIONS
+from ronzzdoi.auth.config import PERMISSION_HIERARCHY
 
 # Module-level reference set by ``init_auth_deps()``.
 _auth: Lighterauth | None = None
@@ -47,37 +47,67 @@ def init_auth_deps(auth: Lighterauth) -> None:
 # ── Public dependency callables ────────────────────────────────────────
 
 
-async def require_write_access(
-    authorization: str | None = Header(None),
-) -> dict[str, Any]:
-    """Require an authenticated user with write permission.
+def require_permission(min_permission: str) -> Callable[..., Any]:
+    """FastAPI dependency factory: require minimum API key permission tier.
 
-    Use on POST, PUT, DELETE endpoints.
+    Usage::
 
-    Validates:
-    - The ``Authorization: Bearer <token>`` header is present and valid.
-    - The user's account is active (not suspended).
-    - The API key or JWT has ``full_access`` permission.
+        @app.post("/api/v1/doi")
+        async def assign_doi(
+            user: dict = Depends(require_permission("edit")),
+        ):
+            ...
 
-    Raises:
-        HTTPException (401): Missing or invalid credentials.
-        HTTPException (403): Insufficient permissions or suspended account.
+    The permission hierarchy is ``read_only`` (0) < ``edit`` (1) < ``full_access`` (2).
+
+    - JWT-authenticated users bypass the permission check (their role is
+      verified separately via ``require_role`` / ``require_admin_role``).
+    - API-key-authenticated users must have a permission level at or above
+      the required minimum.
+
+    Args:
+        min_permission: The minimum required permission level
+            (one of ``PERMISSION_READ_ONLY``, ``PERMISSION_EDIT``,
+            ``PERMISSION_FULL_ACCESS``).
+
+    Returns:
+        A dependency callable that authenticates and checks permission level.
     """
-    _check_inited()
-    try:
-        user = await _auth.require_active_user(authorization)
-    except HTTPException:
-        raise
 
-    # Check permission for API-key-authenticated requests
-    permission = user.get("api_key_permission")
-    if permission and permission not in WRITE_PERMISSIONS:
-        raise HTTPException(
-            status_code=HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions. Requires full_access.",
-        )
+    async def _check_permission(
+        authorization: str | None = Header(None),
+    ) -> dict[str, Any]:
+        _check_inited()
+        try:
+            user = await _auth.require_active_user(authorization)
+        except HTTPException:
+            raise
 
-    return user
+        permission = user.get("api_key_permission")
+        if permission:
+            min_level = PERMISSION_HIERARCHY.get(min_permission, 0)
+            actual_level = PERMISSION_HIERARCHY.get(permission, -1)
+            if actual_level < min_level:
+                raise HTTPException(
+                    status_code=HTTP_403_FORBIDDEN,
+                    detail=(
+                        f"Insufficient permissions. Requires at least "
+                        f"'{min_permission}'."
+                    ),
+                )
+
+        return user
+
+    return _check_permission
+
+
+require_write_access: Callable[..., Any] = require_permission("edit")
+"""Require an authenticated user with at least ``edit`` permission.
+
+Use on POST, PUT, DELETE endpoints.
+
+Convenience alias for ``require_permission("edit")``.
+"""
 
 
 async def optional_read_access(
