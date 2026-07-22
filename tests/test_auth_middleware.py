@@ -46,7 +46,18 @@ class TestRequireWriteAccess:
             headers={"Authorization": f"Bearer {admin_api_key_readonly}"},
         )
         assert resp.status_code == 403, resp.text
-        assert "full_access" in resp.text
+        assert "Requires at least 'edit'" in resp.text
+
+    def test_valid_edit_key(self, client: TestClient, admin_api_key_edit: str) -> None:
+        """POST with a valid edit-access API key → 200."""
+        resp = client.post(
+            "/api/test/write",
+            headers={"Authorization": f"Bearer {admin_api_key_edit}"},
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["user_id"] == "admin-test-001"
+        assert data["role"] == "administrator"
 
 
 class TestOptionalReadAccess:
@@ -110,6 +121,76 @@ class TestRequireAdminRole:
         assert resp.status_code == 200, resp.text
         data = resp.json()
         assert data["role"] == "administrator"
+
+
+class TestRequirePermission:
+    """Tests for the ``require_permission(min_tier)`` dependency factory."""
+
+    def test_full_access_passes_full_key(self, client: TestClient, admin_api_key_full: str) -> None:
+        """require_permission('full_access') passes with full_access key."""
+        resp = client.post(
+            "/api/test/require/full_access",
+            headers={"Authorization": f"Bearer {admin_api_key_full}"},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["user_id"] == "admin-test-001"
+
+    def test_full_access_rejects_edit_key(self, client: TestClient, admin_api_key_edit: str) -> None:
+        """require_permission('full_access') rejects edit key → 403."""
+        resp = client.post(
+            "/api/test/require/full_access",
+            headers={"Authorization": f"Bearer {admin_api_key_edit}"},
+        )
+        assert resp.status_code == 403, resp.text
+        assert "Requires at least 'full_access'" in resp.text
+
+    def test_edit_passes_edit_key(self, client: TestClient, admin_api_key_edit: str) -> None:
+        """require_permission('edit') passes with edit key."""
+        resp = client.post(
+            "/api/test/require/edit",
+            headers={"Authorization": f"Bearer {admin_api_key_edit}"},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["user_id"] == "admin-test-001"
+
+    def test_edit_passes_full_key(self, client: TestClient, admin_api_key_full: str) -> None:
+        """require_permission('edit') passes with full_access key (hierarchy)."""
+        resp = client.post(
+            "/api/test/require/edit",
+            headers={"Authorization": f"Bearer {admin_api_key_full}"},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["user_id"] == "admin-test-001"
+
+    def test_edit_rejects_readonly_key(self, client: TestClient, admin_api_key_readonly: str) -> None:
+        """require_permission('edit') rejects read_only key → 403."""
+        resp = client.post(
+            "/api/test/require/edit",
+            headers={"Authorization": f"Bearer {admin_api_key_readonly}"},
+        )
+        assert resp.status_code == 403, resp.text
+        assert "Requires at least 'edit'" in resp.text
+
+    def test_readonly_passes_readonly_key(self, client: TestClient, admin_api_key_readonly: str) -> None:
+        """require_permission('read_only') passes with read_only key."""
+        resp = client.post(
+            "/api/test/require/read_only",
+            headers={"Authorization": f"Bearer {admin_api_key_readonly}"},
+        )
+        assert resp.status_code == 200, resp.text
+
+    def test_readonly_passes_any_key(self, client: TestClient, admin_api_key_edit: str, admin_api_key_full: str) -> None:
+        """require_permission('read_only') passes with any key."""
+        resp1 = client.post(
+            "/api/test/require/read_only",
+            headers={"Authorization": f"Bearer {admin_api_key_edit}"},
+        )
+        assert resp1.status_code == 200
+        resp2 = client.post(
+            "/api/test/require/read_only",
+            headers={"Authorization": f"Bearer {admin_api_key_full}"},
+        )
+        assert resp2.status_code == 200
 
 
 class TestInitDepsGuard:

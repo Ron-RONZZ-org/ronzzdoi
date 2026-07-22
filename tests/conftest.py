@@ -93,6 +93,24 @@ def admin_api_key_full(auth_db: LighterDB, seed_admin_user: dict[str, Any]) -> s
 
 
 @pytest.fixture
+def admin_api_key_edit(auth_db: LighterDB, seed_admin_user: dict[str, Any]) -> str:
+    """Create and return an edit-access API key for the admin user.
+
+    Returns the raw key string.
+    """
+    raw_key, prefix, hashed_key = generate_api_key()
+    now = "2026-01-01T00:00:00+00:00"
+    key_id = "ak_test_edit_" + secrets.token_hex(8)
+    auth_db.execute(
+        "INSERT INTO api_keys (id, name, key, prefix, permission, "
+        "created_at, updated_at, user_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (key_id, "test-edit-access", hashed_key, prefix, "edit", now, now, seed_admin_user["id"]),
+    )
+    return raw_key
+
+
+@pytest.fixture
 def admin_api_key_readonly(auth_db: LighterDB, seed_admin_user: dict[str, Any]) -> str:
     """Create and return a read-only API key for the admin user.
 
@@ -145,6 +163,7 @@ def app(tmp_db_path: Path, auth_db: LighterDB) -> FastAPI:
     from ronzzdoi.server.auth_middleware import (
         optional_read_access,
         require_admin_role,
+        require_permission,
         require_write_access,
     )
 
@@ -163,6 +182,25 @@ def app(tmp_db_path: Path, auth_db: LighterDB) -> FastAPI:
     @app.get("/api/test/admin")
     async def test_admin_endpoint(
         user: dict[str, Any] = Depends(require_admin_role),
+    ) -> dict[str, Any]:
+        return {"user_id": user["id"], "role": user.get("role")}
+
+    # Test endpoints for the require_permission factory
+    @app.post("/api/test/require/full_access")
+    async def test_require_full_access(
+        user: dict[str, Any] = Depends(require_permission("full_access")),
+    ) -> dict[str, Any]:
+        return {"user_id": user["id"], "role": user.get("role")}
+
+    @app.post("/api/test/require/edit")
+    async def test_require_edit(
+        user: dict[str, Any] = Depends(require_permission("edit")),
+    ) -> dict[str, Any]:
+        return {"user_id": user["id"], "role": user.get("role")}
+
+    @app.post("/api/test/require/read_only")
+    async def test_require_read_only(
+        user: dict[str, Any] = Depends(require_permission("read_only")),
     ) -> dict[str, Any]:
         return {"user_id": user["id"], "role": user.get("role")}
 
