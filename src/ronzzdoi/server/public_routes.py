@@ -32,7 +32,7 @@ from slowapi.util import get_remote_address
 from starlette.status import HTTP_400_BAD_REQUEST, HTTP_404_NOT_FOUND
 
 from ronzzdoi.citation import CitationFormatter
-from ronzzdoi.doi.exceptions import DOIAmbiguousError
+from ronzzdoi.doi.exceptions import DOIAmbiguousError, DOINotFoundError
 from ronzzdoi.doi.service import DOIService
 from ronzzdoi.db.service import DOIService as DBDOIService
 from ronzzdoi.server.public_schemas import (
