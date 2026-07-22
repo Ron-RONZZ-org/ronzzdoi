@@ -66,7 +66,6 @@ async def execute_command(
         type=result.get("type", "detail"),
         title=result.get("title", "Result"),
         data=result.get("data"),
-        id_key=result.get("id_key"),
     )
 
 
