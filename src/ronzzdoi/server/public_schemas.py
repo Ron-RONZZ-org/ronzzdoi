@@ -25,6 +25,10 @@ class PublicDOIResponse(BaseModel):
 
     Only basic metadata is exposed — no internal state, status flags,
     redirect history, or deletion timestamps.
+
+    The ``snippet`` field is only populated by search endpoints that
+    use FTS5 highlighting.  It is ``None`` for direct DOI resolution
+    and semantic search results.
     """
 
     doi: str
@@ -33,19 +37,22 @@ class PublicDOIResponse(BaseModel):
     doi_type: str = "external"
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: str
+    snippet: str | None = None
 
 
 class PublicSearchResponse(BaseModel):
     """Paginated search result for public API consumers.
 
     Each item uses :class:`PublicDOIResponse`.  The ``limit`` field
-    reflects the actual cap applied (max 50).
+    reflects the actual cap applied (max 50).  The ``mode`` field
+    indicates which search mode was used (``"fts"`` or ``"semantic"``).
     """
 
     items: list[PublicDOIResponse]
     total: int
     limit: int
     offset: int
+    mode: str = "fts"
 
 
 class PublicCitationResponse(BaseModel):
