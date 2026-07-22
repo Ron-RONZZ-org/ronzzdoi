@@ -15,14 +15,14 @@ Usage::
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 from fastapi import Header, HTTPException
 from starlette.status import HTTP_403_FORBIDDEN
 
 from lighterauth.middleware import Lighterauth
 
-from ronzzdoi.auth.config import WRITE_PERMISSIONS
+from ronzzdoi.auth.config import PERMISSION_FULL_ACCESS, PERMISSION_READ_ONLY, WRITE_PERMISSIONS
 
 # Module-level reference set by ``init_auth_deps()``.
 _auth: Lighterauth | None = None
@@ -134,6 +134,67 @@ async def require_admin_role(
             detail="Insufficient permissions. Requires administrator role.",
         )
     return user
+
+def require_permission(min_permission: str = PERMISSION_READ_ONLY) -> Callable[..., Any]:
+    """FastAPI dependency factory: require a minimum permission tier.
+
+    Tier ordering: ``read_only`` < ``full_access``.
+    ``admin`` role bypasses all permission checks.
+
+    Use on endpoints that need tiered access::
+
+        # Read-only endpoint
+        @app.get("/api/v1/doi/{doi}")
+        async def resolve_doi(user=Depends(require_permission("read_only"))):
+            ...
+
+        # Write endpoint
+        @app.post("/api/v1/doi")
+        async def assign_doi(user=Depends(require_permission("full_access"))):
+            ...
+
+    Args:
+        min_permission: Minimum permission tier required.
+            ``"read_only"`` accepts read_only and full_access keys
+            (and all admin users).  ``"full_access"`` requires
+            full_access permission.
+
+    Returns:
+        A dependency callable that authenticates the user and checks
+        the permission tier.
+    """
+
+    async def _permission_checker(
+        authorization: str | None = Header(None),
+    ) -> dict[str, Any]:
+        _check_inited()
+        try:
+            user = await _auth.require_active_user(authorization)
+        except HTTPException:
+            raise
+
+        # Admin role bypasses permission checks
+        if user.get("role") == "administrator":
+            return user
+
+        # Check API key permission tier
+        permission = user.get("api_key_permission")
+        if permission:
+            if min_permission == PERMISSION_FULL_ACCESS and permission != PERMISSION_FULL_ACCESS:
+                raise HTTPException(
+                    status_code=HTTP_403_FORBIDDEN,
+                    detail=f"Insufficient permissions. Requires '{min_permission}'.",
+                )
+            if min_permission == PERMISSION_READ_ONLY:
+                if permission not in (PERMISSION_READ_ONLY, PERMISSION_FULL_ACCESS):
+                    raise HTTPException(
+                        status_code=HTTP_403_FORBIDDEN,
+                        detail=f"Insufficient permissions. Requires at least '{min_permission}'.",
+                    )
+
+        return user
+
+    return _permission_checker
 
 
 # ── Internal helpers ───────────────────────────────────────────────────

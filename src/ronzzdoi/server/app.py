@@ -3,6 +3,9 @@
 Creates and configures the API server with:
 - Auth middleware (API key verification, route protection)
 - API key management endpoints
+- DOI CRUD endpoints (assign, resolve, modify, delete, merge, search)
+- Citation endpoints (list styles, format)
+- Search endpoints (FTS5, semantic)
 - Command dispatch (``!xxx`` commands from the frontend)
 - CORS (ready for future Svelte frontend)
 
@@ -26,9 +29,15 @@ from lightercore.paths import set_app_name
 
 from ronzzdoi.auth import setup_auth
 from ronzzdoi.auth.config import resolve_auth_db_path
+from ronzzdoi.citation import CitationFormatter
+from ronzzdoi.db import init_db as init_ronzzdoi_db
+from ronzzdoi.doi.service import DOIService as DOICrudService
 from ronzzdoi.server.auth_middleware import init_auth_deps
 from ronzzdoi.server.auth_routes import mount_auth_routes
+from ronzzdoi.server.citation_routes import mount_citation_routes
 from ronzzdoi.server.command_routes import mount_command_routes
+from ronzzdoi.server.doi_routes import mount_doi_routes, register_doi_redirect
+from ronzzdoi.server.search_routes import mount_search_routes
 
 _DEFAULT_PORT = 8000
 """Default port for the API server."""
@@ -54,7 +63,7 @@ def create_app(
 
     Args:
         data_dir: Path to the data directory containing ``auth.db``
-            (and future ``ronzzdoi.db``).  Defaults to the XDG-compliant
+            and ``ronzzdoi.db``.  Defaults to the XDG-compliant
             path from ``lightercore.paths``.
         enable_cors: Whether to add the CORS middleware (default True).
             Disable for production if a reverse proxy handles CORS.
@@ -71,6 +80,18 @@ def create_app(
 
     # ── Wire up middleware dependencies ────────────────────────────────
     init_auth_deps(auth)
+
+    # ── ronzzdoi database ──────────────────────────────────────────────
+    # init_db returns (LighterDB, DOIService, RedirectService)
+    # where DOIService is from ronzzdoi.db.service (search-optimized)
+    ronzzdoi_db, db_search_svc, _redirect_svc = init_ronzzdoi_db()
+
+    # Create the DOI CRUD service (from ronzzdoi.doi.service)
+    # It wraps the same database with assign/resolve/modify/delete/merge logic.
+    doi_crud_svc = DOICrudService(ronzzdoi_db)
+
+    # Citation formatter wraps the DOI CRUD service for resolve operations
+    citation_formatter = CitationFormatter(doi_crud_svc)
 
     # ── Create the FastAPI application ─────────────────────────────────
     app = FastAPI(
@@ -97,6 +118,15 @@ def create_app(
     # ── Mount command routes ───────────────────────────────────────────
     mount_command_routes(app)
 
+    # ── Mount DOI routes ────────────────────────────────────────────────
+    mount_doi_routes(app, doi_svc=doi_crud_svc, search_svc=db_search_svc)
+
+    # ── Mount citation routes ──────────────────────────────────────────
+    mount_citation_routes(app, citation_formatter)
+
+    # ── Mount search routes ─────────────────────────────────────────────
+    mount_search_routes(app, db_search_svc)
+
     # ── Health check ───────────────────────────────────────────────────
     @app.get("/api/health")
     async def health_check() -> dict[str, str]:
@@ -107,5 +137,8 @@ def create_app(
     @app.get("/")
     async def root_health() -> dict[str, str]:
         return {"status": "ok", "service": "ronzzdoi"}
+
+    # ── DOI redirect (must be last — catch-all route) ─────────────────
+    register_doi_redirect(app)
 
     return app

@@ -323,6 +323,79 @@ class DOIService(CRUDService):
         self._post_delete(record["doi"], record)
         return True
 
+    def merge_dois(
+        self,
+        source_doi: str,
+        target_doi: str,
+        *,
+        delete_source: bool = True,
+    ) -> dict[str, Any]:
+        """Merge a source DOI into a target DOI.
+
+        The source's redirect history is moved to the target, and
+        the source DOI is optionally tombstoned.
+
+        Args:
+            source_doi: Full DOI or prefix of the source record (will be
+                tombstoned or deleted).
+            target_doi: Full DOI or prefix of the target record (receives
+                the redirect history).
+            delete_source: If True (default), tombstone the source DOI.
+                If False, only move redirect history.
+
+        Returns:
+            The updated target DOI record.
+
+        Raises:
+            DOINotFoundError: If either DOI does not exist.
+            DOIAmbiguousError: If either prefix is ambiguous.
+        """
+        source = self._resolve_exact(source_doi)
+        if source is None:
+            raise DOINotFoundError(source_doi)
+
+        target = self._resolve_exact(target_doi)
+        if target is None:
+            raise DOINotFoundError(target_doi)
+
+        # Move source's redirect history to target
+        source_redirects = self._get_redirect_history(source["doi"])
+        for redirect in source_redirects:
+            # Re-insert with the target DOI
+            self.db.execute(
+                "UPDATE redirects SET doi = ? WHERE redirect_id = ?",
+                (target["doi"], redirect["redirect_id"]),
+            )
+
+        # Move source's metadata if target has no target_url or title
+        update_data: dict[str, Any] = {}
+        if not target.get("target_url") and source.get("target_url"):
+            update_data["target_url"] = source["target_url"]
+        if not target.get("title") and source.get("title"):
+            update_data["title"] = source["title"]
+
+        if update_data:
+            update_data["updated_at"] = now()
+            set_clauses = [f"{k} = ?" for k in update_data]
+            values = [update_data[k] for k in update_data] + [target["doi"]]
+            with self.db.transaction() as conn:
+                conn.execute(
+                    f"UPDATE {self.table} SET {', '.join(set_clauses)} "
+                    f"WHERE {self._pk_column} = ?",
+                    values,
+                )
+
+        # Tombstone the source DOI if requested
+        if delete_source:
+            self.delete_doi(source["doi"])
+
+        # Re-fetch and return the target
+        updated = self._resolve_exact(target["doi"])
+        if updated is None:
+            raise DOINotFoundError(target_doi)
+
+        return updated
+
     def list_dois(
         self,
         limit: int = 100,
