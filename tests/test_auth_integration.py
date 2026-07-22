@@ -162,3 +162,73 @@ class TestCreateApp:
         c2 = TestClient(app2)
         assert c1.get("/api/health").status_code == 200
         assert c2.get("/api/health").status_code == 200
+
+    # ── Mode tests ────────────────────────────────────────────────────
+
+    def test_internal_mode_routes(self, tmp_path: Path) -> None:
+        """``mode="internal"``: only internal routes, CORS disabled."""
+        from ronzzdoi.server.app import create_app
+
+        app = create_app(data_dir=str(tmp_path), mode="internal")
+        client = TestClient(app)
+
+        # Internal routes present
+        assert client.get("/api/health").status_code == 200
+        assert client.get("/api/v1/doi/10.ronzz/nonexistent").status_code == 401
+
+        # Public routes absent
+        assert client.get("/public/v1/health").status_code == 404
+
+        # CORS disabled
+        resp = client.get("/", headers={"Origin": "https://example.com"})
+        assert resp.headers.get("access-control-allow-origin") is None
+
+    def test_public_mode_routes(self, tmp_path: Path) -> None:
+        """``mode="public"``: only public routes, CORS enabled, docs disabled."""
+        from ronzzdoi.server.app import create_app
+
+        app = create_app(data_dir=str(tmp_path), mode="public")
+        client = TestClient(app)
+
+        # Public routes present
+        assert client.get("/public/v1/health").status_code == 200
+
+        # Internal routes absent
+        assert client.get("/api/health").status_code == 404
+        assert client.get("/api/v1/doi/10.ronzz/nonexistent").status_code == 404
+
+        # OpenAPI docs disabled in public mode
+        assert client.get("/api/docs").status_code == 404
+        assert client.get("/api/redoc").status_code == 404
+
+        # CORS enabled
+        resp = client.get("/", headers={"Origin": "https://example.com"})
+        cors_origin = resp.headers.get("access-control-allow-origin")
+        assert cors_origin is not None, "CORS header missing in public mode"
+
+    def test_full_mode_routes(self, tmp_path: Path) -> None:
+        """``mode="full"``: both internal and public routes, CORS enabled."""
+        from ronzzdoi.server.app import create_app
+
+        app = create_app(data_dir=str(tmp_path), mode="full")
+        client = TestClient(app)
+
+        # Internal routes present
+        assert client.get("/api/health").status_code == 200
+
+        # Public routes present
+        assert client.get("/public/v1/health").status_code == 200
+
+        # CORS enabled
+        resp = client.get("/", headers={"Origin": "https://example.com"})
+        cors_origin = resp.headers.get("access-control-allow-origin")
+        assert cors_origin is not None, "CORS header missing in full mode"
+
+    def test_invalid_mode(self) -> None:
+        """Invalid mode string raises ``ValueError``."""
+        from ronzzdoi.server.app import create_app
+
+        import pytest
+
+        with pytest.raises(ValueError, match="Unknown mode"):
+            create_app(mode="invalid_mode")

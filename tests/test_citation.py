@@ -650,3 +650,57 @@ class TestEdgeCases:
         # Should still format — the record is resolvable with deleted_at set
         result = formatter.format(doi, style="apa")
         assert "Deleted Book" in result
+
+    def test_inline_authors(self, formatter, doi_svc):
+        """Inline authors (``given``/``family`` without ``person_doi``) format correctly."""
+        doi = doi_svc.assign(
+            doi_type="book",
+            title="Inline Authors",
+            metadata={
+                "authors": [
+                    {"given": "John", "family": "Smith"},
+                    {"given": "Alice", "family": "Johnson"},
+                ],
+                "title": "Inline Authors Test",
+                "publisher": "Test Press",
+                "year": 2024,
+            },
+        )["doi"]
+        result = formatter.format(doi, style="apa")
+        assert "Smith, J." in result
+        assert "Johnson, A." in result
+        assert "Inline Authors Test" in result
+
+    def test_inline_author_single(self, formatter, doi_svc):
+        """Single inline author formats correctly (``1 author`` code path)."""
+        doi = doi_svc.assign(
+            doi_type="book",
+            title="Single Author",
+            metadata={
+                "authors": [{"given": "Jane", "family": "Doe"}],
+                "title": "Single Author Book",
+                "publisher": "SP Press",
+                "year": 2024,
+            },
+        )["doi"]
+        result = formatter.format(doi, style="apa")
+        assert "Doe, J." in result
+
+    def test_inline_author_mixed_person_doi_and_inline(self, formatter, doi_svc, person_doi):
+        """Mixed author list: person_doi refs + inline authors."""
+        doi = doi_svc.assign(
+            doi_type="book",
+            title="Mixed Authors",
+            metadata={
+                "authors": [
+                    {"person_doi": person_doi},
+                    {"given": "Bob", "family": "Builder"},
+                ],
+                "title": "Mixed Authors Book",
+                "publisher": "MP Press",
+                "year": 2024,
+            },
+        )["doi"]
+        result = formatter.format(doi, style="apa")
+        assert "Lovelace, A." in result
+        assert "Builder, B." in result

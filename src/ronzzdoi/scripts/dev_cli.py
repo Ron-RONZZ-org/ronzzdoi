@@ -1,12 +1,13 @@
 """Dev CLI entry point for ronzzdoi.
 
-Provides ``ronzzdoi-dev`` command with options for port, data directory,
-and seed data.
+Provides ``ronzzdoi-dev`` command with options for mode, port, data
+directory, and seed data.
 
 Usage::
 
     ronzzdoi-dev --port 8080 --seed
     ronzzdoi-dev --data-dir /tmp/ronzzdoi-dev --seed
+    ronzzdoi-dev --mode public --port 9000
 """
 
 from __future__ import annotations
@@ -43,6 +44,14 @@ def dev_main() -> None:
         action="store_true",
         help="Seed the database with an admin user for development",
     )
+    parser.add_argument(
+        "--mode",
+        type=str,
+        default="full",
+        choices=["full", "internal", "public"],
+        help='Server mode: "full" (both internal+public, default), '
+        '"internal" (auth-protected only), or "public" (rate-limited only)',
+    )
 
     args = parser.parse_args()
 
@@ -50,7 +59,7 @@ def dev_main() -> None:
     try:
         from ronzzdoi.server.app import create_app
 
-        app = create_app(data_dir=args.data_dir)
+        app = create_app(data_dir=args.data_dir, mode=args.mode)
     except Exception as exc:
         print(f"Failed to create app: {exc}", file=sys.stderr)
         sys.exit(1)
@@ -63,8 +72,9 @@ def dev_main() -> None:
     try:
         import uvicorn
 
-        print(f"Starting ronzzdoi dev server on {args.host}:{args.port}")
-        print(f"API docs: http://{args.host}:{args.port}/api/docs")
+        print(f"Starting ronzzdoi dev server (mode={args.mode}) on {args.host}:{args.port}")
+        if args.mode in ("full", "internal"):
+            print(f"API docs: http://{args.host}:{args.port}/api/docs")
         uvicorn.run(app, host=args.host, port=args.port)
     except ImportError:
         print("uvicorn is required. Install with: uv pip install uvicorn", file=sys.stderr)

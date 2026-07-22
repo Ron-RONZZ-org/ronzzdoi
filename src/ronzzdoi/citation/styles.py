@@ -41,17 +41,36 @@ def _resolve_author_list(
     resolve: DOI_RESOLVER,
     formatter: Callable[[dict[str, Any]], str],
 ) -> list[str]:
-    """Resolve a list of ``{person_doi: ...}`` refs to formatted names."""
+    """Resolve author entries to formatted name strings.
+
+    Supports two author formats:
+
+    * **Person DOI reference** — ``{"person_doi": "10.ronzz/..."}``.
+      The DOI is resolved and the full person record is passed to the
+      *formatter*.
+    * **Inline author** — ``{"given": "...", "family": "..."}`` (CSL JSON
+      convention).  The inline data is wrapped in a pseudo-person record
+      matching the person-DOI format so the *formatter* can handle it.
+    """
     names: list[str] = []
     for ref in authors:
         doi = ref.get("person_doi", "")
-        if not doi:
-            continue
-        person = resolve(doi)
-        if person:
-            names.append(formatter(person))
+        if doi:
+            # Person DOI reference — resolve and format
+            person = resolve(doi)
+            if person:
+                names.append(formatter(person))
+            else:
+                names.append("[unresolved person]")
         else:
-            names.append("[unresolved person]")
+            # Inline author (given/family keys, CSL JSON convention)
+            given = ref.get("given", ref.get("first_name", ""))
+            family = ref.get("family", ref.get("last_name", ""))
+            if given or family:
+                pseudo = {"metadata": {"last_name": family, "first_name": given}}
+                names.append(formatter(pseudo))
+            else:
+                names.append("[unknown author]")
     return names
 
 

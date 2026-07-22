@@ -24,15 +24,20 @@ semantic = [
     "lightersearch>=0.1.0",
     "sqlite-vec>=0.1.0",
 ]
+public = [
+    "slowapi>=0.1.9",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-mock>=3.14.0",
     "pytest-asyncio>=0.24.0",
     "ruff>=0.4.0",
+    "slowapi>=0.1.9",
 ]
 
 [project.scripts]
 ronzzdoi-dev = "ronzzdoi.scripts.dev_cli:dev_main"
+ronzzdoi-server = "ronzzdoi.scripts.server_cli:server_main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ronzzdoi"]
