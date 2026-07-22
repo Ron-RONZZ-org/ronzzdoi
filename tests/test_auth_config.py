@@ -9,8 +9,8 @@ from ronzzdoi.auth.config import (
     ALL_PERMISSIONS,
     API_KEY_PREFIX,
     AUTH_HEADER_SCHEME,
+    PERMISSION_ADMIN,
     PERMISSION_EDIT,
-    PERMISSION_FULL_ACCESS,
     PERMISSION_HIERARCHY,
     PERMISSION_READ_ONLY,
     WRITE_PERMISSIONS,
@@ -28,12 +28,12 @@ class TestPermissionConstants:
     def test_edit_value(self) -> None:
         assert PERMISSION_EDIT == "edit"
 
-    def test_full_access_value(self) -> None:
-        assert PERMISSION_FULL_ACCESS == "full_access"
+    def test_admin_value(self) -> None:
+        assert PERMISSION_ADMIN == "admin"
 
-    def test_write_permissions_edit_and_full(self) -> None:
-        """``edit`` and ``full_access`` grant write capability."""
-        assert set(WRITE_PERMISSIONS) == {PERMISSION_EDIT, PERMISSION_FULL_ACCESS}
+    def test_write_permissions_edit_and_admin(self) -> None:
+        """``edit`` and ``admin`` grant write capability."""
+        assert set(WRITE_PERMISSIONS) == {PERMISSION_EDIT, PERMISSION_ADMIN}
         assert PERMISSION_READ_ONLY not in WRITE_PERMISSIONS
 
     def test_all_permissions_three_tiers(self) -> None:
@@ -41,7 +41,7 @@ class TestPermissionConstants:
         assert set(ALL_PERMISSIONS) == {
             PERMISSION_READ_ONLY,
             PERMISSION_EDIT,
-            PERMISSION_FULL_ACCESS,
+            PERMISSION_ADMIN,
         }
 
     def test_permission_hierarchy_structure(self) -> None:
@@ -49,13 +49,13 @@ class TestPermissionConstants:
         assert PERMISSION_HIERARCHY == {
             "read_only": 0,
             "edit": 1,
-            "full_access": 2,
+            "admin": 2,
         }
 
     def test_permission_hierarchy_ordering(self) -> None:
         """Hierarchy levels increase with access rights."""
         assert PERMISSION_HIERARCHY[PERMISSION_READ_ONLY] < PERMISSION_HIERARCHY[PERMISSION_EDIT]
-        assert PERMISSION_HIERARCHY[PERMISSION_EDIT] < PERMISSION_HIERARCHY[PERMISSION_FULL_ACCESS]
+        assert PERMISSION_HIERARCHY[PERMISSION_EDIT] < PERMISSION_HIERARCHY[PERMISSION_ADMIN]
 
 
 class TestHeaderConstants:

@@ -115,18 +115,18 @@ def _seed_data(data_dir: str | None) -> None:
         (user_id, "admin@ronzz.org", "admin", hashed, "administrator", "active", now, now),
     )
 
-    # Create full-access API key
-    raw_full, prefix_full, hashed_full = generate_api_key()
+    # Create admin API key
+    raw_admin, prefix_admin, hashed_admin = generate_api_key()
     db.execute(
         "INSERT INTO api_keys (id, name, key, prefix, permission, "
         "created_at, updated_at, user_id) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (
-            "ak_seed_full_" + secrets.token_hex(8),
-            "dev-full-access",
-            hashed_full,
-            prefix_full,
-            "full_access",
+            "ak_seed_admin_" + secrets.token_hex(8),
+            "dev-admin",
+            hashed_admin,
+            prefix_admin,
+            "admin",
             now,
             now,
             user_id,
@@ -153,5 +153,5 @@ def _seed_data(data_dir: str | None) -> None:
 
     print(f"Seed data created:")
     print(f"  Admin user: admin@ronzz.org / admin123")
-    print(f"  Full-access API key: {raw_full}")
+    print(f"  Admin API key: {raw_admin}")
     print(f"  Read-only API key:   {raw_ro}")

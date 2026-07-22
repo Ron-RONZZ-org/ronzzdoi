@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 from lightercore.db import LighterDB
 
 from ronzzdoi.auth.config import ALL_PERMISSIONS
-from ronzzdoi.server.auth_middleware import require_admin_role
+from ronzzdoi.server.auth_middleware import require_permission
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -50,7 +50,7 @@ def mount_auth_routes(app: Any, auth_db: LighterDB) -> None:
 @router.post("/keys", response_model=ApiKeyWithSecret, status_code=201)
 async def create_api_key(
     body: ApiKeyCreate,
-    user: dict[str, Any] = Depends(require_admin_role),
+    user: dict[str, Any] = Depends(require_permission("admin")),
 ) -> ApiKeyWithSecret:
     """Generate a new API key.
 
@@ -63,10 +63,10 @@ async def create_api_key(
             detail="Auth database not initialised",
         )
 
-    if body.permission.value not in ALL_PERMISSIONS:
+    if body.permission not in ALL_PERMISSIONS:
         raise HTTPException(
             status_code=422,
-            detail=f"Invalid permission '{body.permission.value}'. "
+            detail=f"Invalid permission '{body.permission}'. "
             f"Must be one of: {ALL_PERMISSIONS}",
         )
 
@@ -86,7 +86,7 @@ async def create_api_key(
             body.name,
             hashed_key,
             prefix,
-            body.permission.value,
+            body.permission,
             body.expires_at.isoformat() if body.expires_at else None,
             now,
             now,
@@ -115,7 +115,7 @@ async def create_api_key(
 @router.get("/keys", response_model=list[ApiKeyPublic])
 async def list_api_keys(
     include_expired: bool = False,
-    user: dict[str, Any] = Depends(require_admin_role),
+    user: dict[str, Any] = Depends(require_permission("admin")),
 ) -> list[ApiKeyPublic]:
     """List all API keys (optionally including expired/revoked ones).
 
@@ -149,7 +149,7 @@ async def list_api_keys(
 @router.delete("/keys/{key_id}", status_code=204)
 async def revoke_api_key(
     key_id: str,
-    user: dict[str, Any] = Depends(require_admin_role),
+    user: dict[str, Any] = Depends(require_permission("admin")),
 ) -> None:
     """Revoke (delete) an API key by ID.
 
@@ -193,7 +193,7 @@ class ApiKeyUpdate(BaseModel):
 async def update_api_key(
     key_id: str,
     body: ApiKeyUpdate,
-    user: dict[str, Any] = Depends(require_admin_role),
+    user: dict[str, Any] = Depends(require_permission("admin")),
 ) -> ApiKeyPublic:
     """Update an existing API key's name, permission, and/or expiry.
 
