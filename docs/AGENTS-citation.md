@@ -35,13 +35,15 @@ CitationFormatter(doi_service)
 
 The citation data lives in the DOI record's `metadata_json` column. The `doi_type` field determines the format. Authors and issuing authorities are person/entity DOIs resolved at format time via `DOIService.resolve()`.
 
-## Styles
+## Supported Styles
 
 | Style | Function | Notes |
 |-------|----------|-------|
 | `apa` | `format_apa()` | APA 7th edition. Author names: `Last, F.` |
 | `vancouver` | `format_vancouver()` | Vancouver style. Author names: `Last F` |
 | `json` | `format_json()` | JSON blob with resolved names |
+
+Only these 3 styles are implemented. The CLI previously offered mla/chicago/bibtex — those were removed in v0.1.0 to match server capability.
 
 ## Resolution Cache
 
@@ -52,4 +54,3 @@ Person/entity DOIs (`person_doi`, `issuing_authority_doi`, `book_doi`) are resol
 - `dois` table: `target_url` is nullable (NULL for entity DOIs)
 - `doi_type` is free-text (no CHECK constraint)
 - No `citations` table (no separate citation storage)
-- No `creator` column on `dois`

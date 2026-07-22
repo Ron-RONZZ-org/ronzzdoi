@@ -4,7 +4,7 @@
 
 The DOI module (`src/ronzzdoi/doi/`) implements the core ronzzDOI lifecycle:
 identifier generation, assignment, resolution, modification with soft redirect,
-tombstone deletion, and paginated listing.
+tombstone deletion, paginated listing, and merging.
 
 ## DOI Format
 
@@ -37,12 +37,13 @@ src/ronzzdoi/doi/
 | `resolve(doi)` | Look up by DOI (prefix matching) | dict or None |
 | `modify(doi, **changes)` | Update fields, soft redirect on URL change | dict |
 | `delete_doi(doi)` | Tombstone (set `deleted_at` in-place) | bool |
+| `merge_dois(src, tgt)` | Merge source DOI into target | dict |
 | `list_dois(limit, offset)` | Paginated listing (active only by default) | list[dict] |
 
 ## Key Behaviors
 
 1. **Opaque identifier**: The DOI string carries no semantic meaning. All metadata
-   (`doi_type`, `title`, `creator`, etc.) is stored in database columns.
+   (`doi_type`, `title`, `metadata_json`, etc.) is stored in database columns.
 2. **Soft redirect**: When `target_url` changes, the old URL is recorded in the
    `redirects` table with a timestamp. Resolution includes the full redirect history.
 3. **Tombstone deletion**: Deleting a DOI sets `deleted_at` but keeps the row,
@@ -55,7 +56,7 @@ src/ronzzdoi/doi/
 
 | Exception | Inherits From | Raised When |
 |-----------|---------------|-------------|
-| `DOIError` | `LighterbirdError` | Base DOI error |
+| `DOIError` | `LighterError` | Base DOI error |
 | `DOINotFoundError` | `DOIError` | DOI doesn't exist (or tombstoned) |
 | `DOIExistsError` | `DOIError` | UUID collision (astronomically rare) |
 | `DOIInvalidError` | `DOIError` | DOI format validation fails |
@@ -63,6 +64,6 @@ src/ronzzdoi/doi/
 
 ## Dependencies
 
-- **Requires**: `lightercore` (LighterbirdDB, CRUDService)
-- **Depends on schema**: `dois` and `redirects` tables (defined in DB module #5)
-- **Imported by**: CLI module, Server module
+- **Requires**: `lightercore` (LighterDB, CRUDService)
+- **Depends on schema**: `dois` and `redirects` tables (defined in DB module)
+- **Imported by**: CLI module, Server module, Citation module

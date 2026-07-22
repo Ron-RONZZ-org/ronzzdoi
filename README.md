@@ -81,19 +81,21 @@ uv pip install -e "../lightercore" -e "../lighterauth" -e ".[dev]"
 ronzzdoi-dev --seed
 ```
 
-This creates an admin API key and a read-only API key, then starts the server on `http://127.0.0.1:8000`. Copy the admin key from the output — it's shown only once.
+This creates an admin API key, a read-only API key, and **8 sample DOIs** (external, book, webpage, film, person, country, circulaire, rulebook), then starts the server on `http://127.0.0.1:8000`. Copy the admin key from the output — it's shown only once.
 
 ### Use the CLI
 
 Open another terminal:
 
 ```bash
-export RONZZDOI_API_KEY="rnzz_a_abc123..."   # the admin key from above
+export RONZZDOI_API_KEY="la_a_abc123..."   # the admin key from above
 
 ronzzdoi help
 ronzzdoi doi search
+ronzzdoi doi search quantum  # matches seeded "Quantum Computing" webpage
 ronzzdoi doi assign https://example.com --title "My Example" --type external
-ronzzdoi doi search quantum
+ronzzdoi auth api_key list
+ronzzdoi auth api_key create --name "CI key" --permission edit --owner "CI pipeline"
 ```
 
 ### Use the GUI
@@ -106,17 +108,14 @@ Open `http://127.0.0.1:6005` in your browser, paste your API key, then type `!he
 
 ## Testing
 
-### Backend unit + integration tests (no server needed)
+### Backend unit + integration tests
 
 ```bash
-# Run all 352 tests
+# Run all tests (352+ backend tests)
 uv run pytest tests/ -v
 
 # Run a specific test file
 uv run pytest tests/test_doi_service.py -v
-
-# Run with coverage
-uv run pytest tests/ --cov=src/ronzzdoi
 ```
 
 ### Frontend component tests
@@ -130,14 +129,14 @@ cd web && npm run test
 
 ```bash
 # Terminal 1: start backend
-ronzzdoi-dev --port 8000
+ronzzdoi-dev
 
 # Terminal 2: start frontend
 cd web && npm run dev
 
 # Terminal 3: run smoke test
 CHROME_PATH=$(npx playwright install --list 2>/dev/null | grep chromium | head -1 | awk '{print $2}') \
-  npx node tests/e2e_gui_smoke.mjs
+  node tests/e2e_gui_smoke.mjs
 ```
 
 The E2E test opens the GUI in headless Chromium, types `!help`, `!doi assign`, `!doi search`, `!citation show`, asserts tabs open with content, and fails on any JS console error.

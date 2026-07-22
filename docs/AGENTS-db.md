@@ -4,10 +4,10 @@
 
 The DB module (`src/ronzzdoi/db/`) is the data foundation for ronzzdoi. It provides:
 
-- **Schema definitions** — SQLite tables for DOIs, citations, redirects, plus FTS5 full-text search
+- **Schema definitions** — SQLite tables for DOIs and redirects, plus FTS5 full-text search
 - **Migration engine** — forward-only schema versioning via `LighterDB.migrate()` (from lightercore)
-- **Service classes** — `DOIService`, `CitationService`, `RedirectService` extending lightercore's `CRUDService`
-- **Application lifecycle** — `init_db()` / `get_db()` for FastAPI startup
+- **Service classes** — `DOIService` (FTS5 search, semantic search via lightersearch), `RedirectService`
+- **Application lifecycle** — `init_db()` singleton for FastAPI startup
 
 ## Source Files
 
@@ -15,7 +15,7 @@ The DB module (`src/ronzzdoi/db/`) is the data foundation for ronzzdoi. It provi
 |------|---------------|
 | `__init__.py` | `init_db()` factory, `get_db()` singleton, public API exports |
 | `schema.py` | `V1` SQL script + `MIGRATIONS` ordered list |
-| `service.py` | `DOIService`, `CitationService`, `RedirectService` |
+| `service.py` | `DOIService` (FTS5), `RedirectService` |
 
 ## Key Design Decisions
 
@@ -33,16 +33,14 @@ The `dois_fts` virtual table is declared as `content='dois'` (external content).
 
 ### Lightersearch integration point
 
-`DOIService` probes for `sqlite-vec` on init and sets `self._vec_available`. The `_post_create`/`_post_update`/`_post_delete` hooks call `_sync_embedding()` / `_remove_embedding()` when vec is available. The actual embedding logic will be implemented when the `lightersearch` repo is created.
+`DOIService` probes for `sqlite-vec` on init and sets `self._vec_available`. The `_post_create`/`_post_update`/`_post_delete` hooks call `_sync_embedding()` / `_remove_embedding()` when vec is available.
 
 ## Schema (v1)
 
 ```
-dois (doi PK, target_url, title, creator, doi_type, metadata_json, created_at, updated_at, deleted_at)
+dois (doi PK, target_url, title, doi_type, metadata_json, created_at, updated_at, deleted_at)
   │
-  ├── citations (citation_id PK, doi FK→dois, doc_type, fields_json, created_at, updated_at)
-  │
-  └── redirects (redirect_id PK, doi FK→dois, old_url, note, created_at, updated_at)
+  └── redirects (redirect_id PK, doi FK→dois, old_url, note, created_at)
 ```
 
 ## Adding a Migration
@@ -57,5 +55,3 @@ MIGRATIONS.append((2, "ALTER TABLE dois ADD COLUMN language TEXT DEFAULT 'en'"))
 ```bash
 PYTHONPATH=src python -m pytest tests/test_db.py -v
 ```
-
-The test suite uses a fresh in-memory database per test (via `tmp_path` fixture). All 26 tests cover schema creation, CRUD operations, FTS5 search, foreign key enforcement, and CHECK constraints.
