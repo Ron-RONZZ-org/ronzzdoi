@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lighterauth.db import init_auth_schema
+from lighterauth.keyonly import init_keyonly_schema
 from lighterauth.middleware import Lighterauth
 from lightercore.db import LighterDB
 
@@ -32,7 +32,7 @@ __all__ = [
 def init_auth_db(db_path: str | Path) -> LighterDB:
     """Initialize the auth database and schema.
 
-    Creates the database file and ``users`` / ``api_keys`` tables
+    Creates the database file and ``api_keys`` table (key-only auth, no users)
     if they do not already exist.
 
     Args:
@@ -42,7 +42,7 @@ def init_auth_db(db_path: str | Path) -> LighterDB:
         An open ``LighterDB`` instance (WAL mode, auto-commit).
     """
     db = LighterDB(str(db_path))
-    init_auth_schema(db)
+    init_keyonly_schema(db)
     return db
 
 
@@ -53,7 +53,7 @@ def setup_auth(
 ) -> tuple[LighterDB, Lighterauth]:
     """Create the auth database and middleware provider.
 
-    This is the one-stop factory for ronzzdoi's auth layer.
+    Uses the key-only auth model (no users table, no passwords).
     Call during server startup::
 
         auth_db, auth = setup_auth("/path/to/auth.db")
@@ -71,5 +71,5 @@ def setup_auth(
           ``require_active_user``, ``require_role``).
     """
     auth_db = init_auth_db(db_path)
-    auth = Lighterauth(auth_db, jwt_secret=jwt_secret)
+    auth = Lighterauth(auth_db, jwt_secret=jwt_secret, keyonly=True)
     return auth_db, auth

@@ -78,8 +78,8 @@ async def create_api_key(
     now = datetime.now(timezone.utc).isoformat()
 
     _auth_db.execute(
-        "INSERT INTO api_keys (id, name, key, prefix, permission, expires_at, "
-        "created_at, updated_at, user_id) "
+        "INSERT INTO api_keys (id, name, key, prefix, permission, owner, expires_at, "
+        "created_at, updated_at) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             key_id,
@@ -87,10 +87,10 @@ async def create_api_key(
             hashed_key,
             prefix,
             body.permission,
+            body.owner,
             body.expires_at.isoformat() if body.expires_at else None,
             now,
             now,
-            user["id"],
         ),
     )
 
@@ -105,6 +105,7 @@ async def create_api_key(
         prefix=row["prefix"],
         key=raw_key,
         permission=row["permission"],
+        owner=row.get("owner"),
         expires_at=_parse_dt(row.get("expires_at")),
         last_used_at=_parse_dt(row.get("last_used_at")),
         created_at=_parse_dt(row["created_at"]),
@@ -137,6 +138,7 @@ async def list_api_keys(
             name=r["name"],
             prefix=r["prefix"],
             permission=r["permission"],
+            owner=r.get("owner"),
             expires_at=_parse_dt(r.get("expires_at")),
             last_used_at=_parse_dt(r.get("last_used_at")),
             created_at=_parse_dt(r["created_at"]),
@@ -241,6 +243,7 @@ async def update_api_key(
             name=row["name"],
             prefix=row["prefix"],
             permission=row["permission"],
+            owner=row.get("owner"),
             expires_at=_parse_dt(row.get("expires_at")),
             last_used_at=_parse_dt(row.get("last_used_at")),
             created_at=_parse_dt(row["created_at"]),
@@ -267,6 +270,7 @@ async def update_api_key(
         name=updated["name"],
         prefix=updated["prefix"],
         permission=updated["permission"],
+        owner=updated.get("owner"),
         expires_at=_parse_dt(updated.get("expires_at")),
         last_used_at=_parse_dt(updated.get("last_used_at")),
         created_at=_parse_dt(updated["created_at"]),

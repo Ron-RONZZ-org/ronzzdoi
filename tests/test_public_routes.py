@@ -37,7 +37,7 @@ def public_app(
     citation_formatter,
 ) -> FastAPI:
     """Build a FastAPI app with public routes only (no internal routes)."""
-    auth = Lighterauth(auth_db)
+    auth = Lighterauth(auth_db, keyonly=True)
     init_auth_deps(auth)
 
     app = FastAPI(title="ronzzdoi-public-test", version="0.0.0")
@@ -87,7 +87,7 @@ def full_app(
     from ronzzdoi.server.doi_routes import mount_doi_routes
     from ronzzdoi.server.search_routes import mount_search_routes
 
-    auth = Lighterauth(auth_db)
+    auth = Lighterauth(auth_db, keyonly=True)
     init_auth_deps(auth)
 
     app = FastAPI(title="ronzzdoi-full-test", version="0.0.0")
@@ -364,7 +364,7 @@ class TestRateLimiting:
         monkeypatch.setenv("RONZZDOI_PUBLIC_RATE_LIMIT_DOI", "1/minute")
 
         # Build a fresh app so the limiter reads the env var at request time
-        auth = Lighterauth(auth_db)
+        auth = Lighterauth(auth_db, keyonly=True)
         init_auth_deps(auth)
 
         app = FastAPI(title="ronzzdoi-ratelimit-test", version="0.0.0")

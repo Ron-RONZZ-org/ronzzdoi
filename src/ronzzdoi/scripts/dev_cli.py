@@ -15,8 +15,6 @@ from __future__ import annotations
 import argparse
 import sys
 
-from lighterauth.password import hash_password
-
 
 def dev_main() -> None:
     """Development server entry point."""
@@ -42,7 +40,7 @@ def dev_main() -> None:
     parser.add_argument(
         "--seed",
         action="store_true",
-        help="Seed the database with an admin user for development",
+        help="Seed the database with an admin key and a read-only key for development",
     )
     parser.add_argument(
         "--mode",
@@ -66,7 +64,8 @@ def dev_main() -> None:
 
     # Seed if requested
     if args.seed:
-        _seed_data(args.data_dir)
+        _seed_keys(args.data_dir)
+        _seed_dois()
 
     # Start uvicorn
     try:
@@ -84,28 +83,25 @@ def dev_main() -> None:
         sys.exit(0)
 
 
-def _seed_data(data_dir: str | None) -> None:
-    """Seed the database with an admin user for development.
+def _seed_keys(data_dir: str | None) -> None:
+    """Seed API keys for development (key-only auth, no users).
 
     Creates:
-    - An admin user (admin@ronzz.org / admin123)
-    - A full-access API key for the admin user
-    - A read-only API key for the admin user
-
-    Uses the same auth database path resolution as ``create_app``.
+    - An admin API key (permission: admin, owner: "dev-admin")
+    - A read-only API key (permission: read_only, owner: "dev-read-only")
     """
     from lighterauth.api_key import generate_api_key
-    from lighterauth.db import init_auth_schema
+    from lighterauth.keyonly import init_keyonly_schema
     from lightercore.db import LighterDB
 
     from ronzzdoi.auth.config import resolve_auth_db_path
 
     db_path = resolve_auth_db_path(data_dir)
     db = LighterDB(str(db_path))
-    init_auth_schema(db)
+    init_keyonly_schema(db)
 
-    # Check if seed already exists
-    existing = db.execute_one("SELECT id FROM users WHERE email = ?", ("admin@ronzz.org",))
+    # Check if keys already exist
+    existing = db.execute_one("SELECT id FROM api_keys LIMIT 1")
     if existing:
         print("Seed data already exists, skipping.")
         return
@@ -115,21 +111,11 @@ def _seed_data(data_dir: str | None) -> None:
 
     now = datetime.now(timezone.utc).isoformat()
 
-    # Create admin user (key-only auth; password is unused but schema-required)
-    user_id = "user_dev_admin_001"
-    _dummy = hash_password(secrets.token_urlsafe(32))
-    db.execute(
-        "INSERT INTO users (id, email, username, password, role, status, "
-        "created_at, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (user_id, "admin@ronzz.org", "admin", _dummy, "administrator", "active", now, now),
-    )
-
     # Create admin API key
     raw_admin, prefix_admin, hashed_admin = generate_api_key()
     db.execute(
-        "INSERT INTO api_keys (id, name, key, prefix, permission, "
-        "created_at, updated_at, user_id) "
+        "INSERT INTO api_keys (id, name, key, prefix, permission, owner, "
+        "created_at, updated_at) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (
             "ak_seed_admin_" + secrets.token_hex(8),
@@ -137,17 +123,17 @@ def _seed_data(data_dir: str | None) -> None:
             hashed_admin,
             prefix_admin,
             "admin",
+            "dev-admin",
             now,
             now,
-            user_id,
         ),
     )
 
     # Create read-only API key
     raw_ro, prefix_ro, hashed_ro = generate_api_key()
     db.execute(
-        "INSERT INTO api_keys (id, name, key, prefix, permission, "
-        "created_at, updated_at, user_id) "
+        "INSERT INTO api_keys (id, name, key, prefix, permission, owner, "
+        "created_at, updated_at) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (
             "ak_seed_ro_" + secrets.token_hex(8),
@@ -155,13 +141,131 @@ def _seed_data(data_dir: str | None) -> None:
             hashed_ro,
             prefix_ro,
             "read_only",
+            "dev-read-only",
             now,
             now,
-            user_id,
         ),
     )
 
     print(f"Seed data created:")
-    print(f"  Admin user: admin@ronzz.org / admin123")
-    print(f"  Admin API key: {raw_admin}")
-    print(f"  Read-only API key:   {raw_ro}")
+    print(f"  Admin API key:      {raw_admin}  (owner: dev-admin)")
+    print(f"  Read-only API key:  {raw_ro}  (owner: dev-read-only)")
+    print()
+    print("⚠  Store keys securely — they will not be shown again.")
+    print("   Use the --owner flag on `ronzzdoi auth api_key create` to")
+    print("   label keys (e.g. '--owner \"Alice\"' or '--owner \"CI pipeline\"').")
+
+
+def _seed_dois() -> None:
+    """Seed sample DOIs of various types for development/testing.
+
+    Creates DOIs of each major type: external, book, webpage, film,
+    person, country, circulaire, rulebook.
+    """
+    from ronzzdoi.db import init_db
+    from ronzzdoi.doi.service import DOIService
+
+    doi_service = DOIService(init_db()[0])
+
+    # Check if DOIs already exist
+    existing = doi_service.list_dois(limit=1)
+    if existing:
+        print("DOI seed data already exists, skipping.")
+        return
+
+    sample_dois = [
+        {
+            "target_url": "https://en.wikipedia.org/wiki/Python_(programming_language)",
+            "doi_type": "external",
+            "title": "Python (programming language) — Wikipedia",
+            "metadata": {},
+        },
+        {
+            "target_url": "https://example.com/clean-code",
+            "doi_type": "book",
+            "title": "Clean Code: A Handbook of Agile Software Craftsmanship",
+            "metadata": {
+                "author": [{"name": "Robert C. Martin", "type": "person"}],
+                "publisher": "Prentice Hall",
+                "year": 2008,
+                "isbn": "978-0132350884",
+            },
+        },
+        {
+            "target_url": "https://example.com/quantum-computing-article",
+            "doi_type": "webpage",
+            "title": "Quantum Computing: A Gentle Introduction",
+            "metadata": {
+                "author": [{"name": "Scott Aaronson", "type": "person"}],
+                "site_name": "Shtetl-Optimized",
+                "published_date": "2025-03-15",
+            },
+        },
+        {
+            "target_url": "https://example.com/inception",
+            "doi_type": "film",
+            "title": "Inception (2010)",
+            "metadata": {
+                "director": {"name": "Christopher Nolan", "type": "person"},
+                "year": 2010,
+                "duration_minutes": 148,
+            },
+        },
+        {
+            "target_url": "https://ronzz.org/people/alice-dubois",
+            "doi_type": "person",
+            "title": "Alice Dubois — Research Scientist",
+            "metadata": {
+                "full_name": "Alice Dubois",
+                "affiliation": "CNRS",
+                "orcid": "0000-0002-1825-0097",
+            },
+        },
+        {
+            "doi_type": "country",
+            "title": "France",
+            "metadata": {
+                "iso_code": "FR",
+                "capital": "Paris",
+                "languages": ["French"],
+            },
+        },
+        {
+            "target_url": "https://example.com/circulaire-2025-01",
+            "doi_type": "circulaire",
+            "title": "Circulaire relative à l'organisation des services",
+            "metadata": {
+                "reference": "CIRC-2025-001",
+                "authority": "Ministère de l'Intérieur",
+                "date": "2025-01-15",
+            },
+        },
+        {
+            "target_url": "https://example.com/rulebook-data-protection",
+            "doi_type": "rulebook",
+            "title": "Règlement intérieur — Protection des données",
+            "metadata": {
+                "reference": "RI-DATA-2024",
+                "effective_date": "2024-06-01",
+                "jurisdiction": "France",
+            },
+        },
+    ]
+
+    count = 0
+    for entry in sample_dois:
+        try:
+            doi_service.assign(
+                target_url=entry.get("target_url"),
+                doi_type=entry["doi_type"],
+                title=entry["title"],
+                metadata=entry["metadata"],
+            )
+            count += 1
+        except Exception as exc:
+            print(f"  Warning: failed to seed DOI '{entry['title']}': {exc}")
+
+    print(f"Seeded {count} sample DOIs of various types.")
+    print("  Try: ronzzdoi doi search")
+    print("  Try: ronzzdoi doi resolve <doi>")
+

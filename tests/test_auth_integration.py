@@ -14,28 +14,24 @@ class TestInitAuthDb:
     """Tests for the ``init_auth_db()`` factory."""
 
     def test_creates_tables(self, tmp_path: Path) -> None:
-        """``init_auth_db`` creates a valid DB with auth schema tables."""
+        """``init_auth_db`` creates a valid DB with key-only auth schema."""
         from ronzzdoi.auth import init_auth_db
 
         db_path = tmp_path / "test_auth.db"
         db = init_auth_db(db_path)
 
         assert db_path.exists()
-        assert db.table_exists("users")
         assert db.table_exists("api_keys")
+        # Key-only mode: no users table
+        assert not db.table_exists("users")
 
-        # Verify columns exist
-        user_cols = {c["name"] for c in db.get_pragma_table_info("users")}
-        assert "id" in user_cols
-        assert "email" in user_cols
-        assert "role" in user_cols
-        assert "status" in user_cols
-
+        # Verify api_keys columns
         key_cols = {c["name"] for c in db.get_pragma_table_info("api_keys")}
         assert "id" in key_cols
         assert "prefix" in key_cols
         assert "permission" in key_cols
-        assert "user_id" in key_cols
+        assert "owner" in key_cols
+        assert "user_id" not in key_cols
 
     def test_idempotent(self, tmp_path: Path) -> None:
         """Calling ``init_auth_db`` twice on the same path is safe."""
@@ -45,7 +41,7 @@ class TestInitAuthDb:
         init_auth_db(db_path)
         # Second call should not error
         db2 = init_auth_db(db_path)
-        assert db2.table_exists("users")
+        assert db2.table_exists("api_keys")
 
 
 class TestSetupAuth:
@@ -59,7 +55,9 @@ class TestSetupAuth:
         auth_db, auth = setup_auth(db_path)
 
         assert isinstance(auth_db, LighterDB)
-        assert auth_db.table_exists("users")
+        assert auth_db.table_exists("api_keys")
+        # Key-only mode: no users table
+        assert not auth_db.table_exists("users")
         # Lighterauth has the expected attributes
         assert hasattr(auth, "require_user")
         assert hasattr(auth, "optional_user")

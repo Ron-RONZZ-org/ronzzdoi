@@ -1,4 +1,7 @@
-"""Shared test fixtures for auth module and API integration tests."""
+"""Shared test fixtures for auth module and API integration tests.
+
+Uses the **key-only** auth schema (no users table, no passwords).
+"""
 
 from __future__ import annotations
 
@@ -11,9 +14,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from lighterauth.api_key import generate_api_key
-from lighterauth.db import init_auth_schema
+from lighterauth.keyonly import init_keyonly_schema
 from lighterauth.middleware import Lighterauth
-from lighterauth.password import hash_password
 from lightercore.db import LighterDB
 
 
@@ -28,55 +30,18 @@ def tmp_db_path(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def auth_db(tmp_db_path: Path) -> Iterator[LighterDB]:
-    """Create and yield an in-memory-like auth database with schema.
+    """Create and yield a key-only auth database (no users table).
 
     The database lives at ``tmp_db_path`` and is removed after the test.
     """
     db = LighterDB(str(tmp_db_path))
-    init_auth_schema(db)
+    init_keyonly_schema(db)
     yield db
 
 
 @pytest.fixture
-def admin_user_id() -> str:
-    """Return a deterministic admin user ID."""
-    return "admin-test-001"
-
-
-@pytest.fixture
-def admin_password() -> str:
-    """Return a test admin password."""
-    return "test-admin-password-123"
-
-
-@pytest.fixture
-def seed_admin_user(auth_db: LighterDB, admin_user_id: str, admin_password: str) -> dict[str, Any]:
-    """Insert an admin user into the auth database and return the row."""
-    now = "2026-01-01T00:00:00+00:00"
-    hashed = hash_password(admin_password)
-    auth_db.execute(
-        "INSERT INTO users (id, email, username, password, role, status, "
-        "created_at, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (
-            admin_user_id,
-            "admin@test.ronzz.org",
-            "testadmin",
-            hashed,
-            "administrator",
-            "active",
-            now,
-            now,
-        ),
-    )
-    row = auth_db.execute_one("SELECT * FROM users WHERE id = ?", (admin_user_id,))
-    assert row is not None, "Failed to insert admin user"
-    return row
-
-
-@pytest.fixture
-def admin_api_key_admin(auth_db: LighterDB, seed_admin_user: dict[str, Any]) -> str:
-    """Create and return an admin API key for the admin user.
+def admin_api_key_admin(auth_db: LighterDB) -> str:
+    """Create and return an admin API key with owner label.
 
     Returns the raw key string (usable in ``Authorization`` headers).
     """
@@ -84,17 +49,17 @@ def admin_api_key_admin(auth_db: LighterDB, seed_admin_user: dict[str, Any]) -> 
     now = "2026-01-01T00:00:00+00:00"
     key_id = "ak_test_admin_" + secrets.token_hex(8)
     auth_db.execute(
-        "INSERT INTO api_keys (id, name, key, prefix, permission, "
-        "created_at, updated_at, user_id) "
+        "INSERT INTO api_keys (id, name, key, prefix, permission, owner, "
+        "created_at, updated_at) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (key_id, "test-admin", hashed_key, prefix, "admin", now, now, seed_admin_user["id"]),
+        (key_id, "test-admin", hashed_key, prefix, "admin", "test-admin", now, now),
     )
     return raw_key
 
 
 @pytest.fixture
-def admin_api_key_edit(auth_db: LighterDB, seed_admin_user: dict[str, Any]) -> str:
-    """Create and return an edit-access API key for the admin user.
+def admin_api_key_edit(auth_db: LighterDB) -> str:
+    """Create and return an edit-access API key with owner label.
 
     Returns the raw key string.
     """
@@ -102,17 +67,17 @@ def admin_api_key_edit(auth_db: LighterDB, seed_admin_user: dict[str, Any]) -> s
     now = "2026-01-01T00:00:00+00:00"
     key_id = "ak_test_edit_" + secrets.token_hex(8)
     auth_db.execute(
-        "INSERT INTO api_keys (id, name, key, prefix, permission, "
-        "created_at, updated_at, user_id) "
+        "INSERT INTO api_keys (id, name, key, prefix, permission, owner, "
+        "created_at, updated_at) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (key_id, "test-edit-access", hashed_key, prefix, "edit", now, now, seed_admin_user["id"]),
+        (key_id, "test-edit-access", hashed_key, prefix, "edit", "test-editor", now, now),
     )
     return raw_key
 
 
 @pytest.fixture
-def admin_api_key_readonly(auth_db: LighterDB, seed_admin_user: dict[str, Any]) -> str:
-    """Create and return a read-only API key for the admin user.
+def admin_api_key_readonly(auth_db: LighterDB) -> str:
+    """Create and return a read-only API key with owner label.
 
     Returns the raw key string.
     """
@@ -120,10 +85,10 @@ def admin_api_key_readonly(auth_db: LighterDB, seed_admin_user: dict[str, Any]) 
     now = "2026-01-01T00:00:00+00:00"
     key_id = "ak_test_ro_" + secrets.token_hex(8)
     auth_db.execute(
-        "INSERT INTO api_keys (id, name, key, prefix, permission, "
-        "created_at, updated_at, user_id) "
+        "INSERT INTO api_keys (id, name, key, prefix, permission, owner, "
+        "created_at, updated_at) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (key_id, "test-read-only", hashed_key, prefix, "read_only", now, now, seed_admin_user["id"]),
+        (key_id, "test-read-only", hashed_key, prefix, "read_only", "test-reader", now, now),
     )
     return raw_key
 
@@ -144,7 +109,7 @@ def app(tmp_db_path: Path, auth_db: LighterDB) -> FastAPI:
     from ronzzdoi.server.auth_middleware import init_auth_deps
     from ronzzdoi.server.auth_routes import mount_auth_routes
 
-    auth = Lighterauth(auth_db)
+    auth = Lighterauth(auth_db, keyonly=True)
     init_auth_deps(auth)
 
     app = FastAPI(title="ronzzdoi-test", version="0.0.0")
@@ -166,32 +131,32 @@ def app(tmp_db_path: Path, auth_db: LighterDB) -> FastAPI:
     async def test_write_endpoint(
         user: dict[str, Any] = Depends(require_permission("edit")),
     ) -> dict[str, Any]:
-        return {"user_id": user["id"], "role": user.get("role")}
+        return {"user_id": user["id"], "permission": user.get("api_key_permission")}
 
     @app.get("/api/test/admin")
     async def test_admin_endpoint(
         user: dict[str, Any] = Depends(require_permission("admin")),
     ) -> dict[str, Any]:
-        return {"user_id": user["id"], "role": user.get("role")}
+        return {"user_id": user["id"], "permission": user.get("api_key_permission")}
 
     # Test endpoints for the require_permission factory (hierarchy-based)
     @app.post("/api/test/require/admin")
     async def test_require_admin(
         user: dict[str, Any] = Depends(require_permission("admin")),
     ) -> dict[str, Any]:
-        return {"user_id": user["id"], "role": user.get("role")}
+        return {"user_id": user["id"], "permission": user.get("api_key_permission")}
 
     @app.post("/api/test/require/edit")
     async def test_require_edit(
         user: dict[str, Any] = Depends(require_permission("edit")),
     ) -> dict[str, Any]:
-        return {"user_id": user["id"], "role": user.get("role")}
+        return {"user_id": user["id"], "permission": user.get("api_key_permission")}
 
     @app.post("/api/test/require/read_only")
     async def test_require_read_only(
         user: dict[str, Any] = Depends(require_permission("read_only")),
     ) -> dict[str, Any]:
-        return {"user_id": user["id"], "role": user.get("role")}
+        return {"user_id": user["id"], "permission": user.get("api_key_permission")}
 
     return app
 
@@ -287,7 +252,7 @@ def doi_app(
     from ronzzdoi.server.doi_routes import mount_doi_routes
     from ronzzdoi.server.search_routes import mount_search_routes
 
-    auth = Lighterauth(auth_db)
+    auth = Lighterauth(auth_db, keyonly=True)
     init_auth_deps(auth)
 
     app = FastAPI(title="ronzzdoi-test", version="0.0.0")
@@ -306,6 +271,7 @@ def doi_app(
 
     # Register DOI redirect (must be last)
     from ronzzdoi.server.doi_routes import register_doi_redirect
+
     register_doi_redirect(app)
 
     return app

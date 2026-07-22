@@ -101,7 +101,7 @@ class TestListApiKeys:
         raw, prefix, hashed = generate_api_key()
         auth_db.execute(
             "INSERT INTO api_keys (id, name, key, prefix, permission, "
-            "expires_at, created_at, updated_at, user_id) "
+            "owner, expires_at, created_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 "ak_expired_" + secrets.token_hex(8),
@@ -109,10 +109,10 @@ class TestListApiKeys:
                 hashed,
                 prefix,
                 "read_only",
+                "test-expired",
                 "2024-01-01T00:00:00Z",
                 "2024-01-01T00:00:00Z",
                 "2024-01-01T00:00:00Z",
-                "admin-test-001",
             ),
         )
 

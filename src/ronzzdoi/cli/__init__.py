@@ -38,8 +38,8 @@ def _build_parser() -> argparse.ArgumentParser:
     # ── Global options ─────────────────────────────────────────────────────
     parser.add_argument(
         "--server",
-        default=os.environ.get("RONZZDOI_SERVER", "https://doi.ronzz.org:8001"),
-        help="ronzzdoi server URL (default: https://doi.ronzz.org:8001, "
+        default=os.environ.get("RONZZDOI_SERVER", "http://127.0.0.1:8000"),
+        help="ronzzdoi server URL (default: http://127.0.0.1:8000, "
         "env: RONZZDOI_SERVER)",
     )
     parser.add_argument(

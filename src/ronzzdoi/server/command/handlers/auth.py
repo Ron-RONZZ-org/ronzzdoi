@@ -56,6 +56,7 @@ def auth_api_key_list(
             "name": r["name"],
             "prefix": r["prefix"],
             "permission": r["permission"],
+            "owner": r.get("owner") or "",
             "expires_at": r.get("expires_at") or "",
             "last_used_at": r.get("last_used_at") or "",
             "created_at": r["created_at"],
@@ -123,9 +124,10 @@ def auth_api_key_create(
     now_iso = datetime.now(timezone.utc).isoformat()
     expires_at = flags.get("expires-at") or flags.get("expires_at", "")
 
+    owner = flags.get("owner", "")
     _auth_routes._auth_db.execute(  # type: ignore[union-attr]
-        "INSERT INTO api_keys (id, name, key, prefix, permission, expires_at, "
-        "created_at, updated_at, user_id) "
+        "INSERT INTO api_keys (id, name, key, prefix, permission, owner, expires_at, "
+        "created_at, updated_at) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             key_id,
@@ -133,10 +135,10 @@ def auth_api_key_create(
             hashed_key,
             prefix,
             permission,
+            owner or None,
             expires_at if expires_at else None,
             now_iso,
             now_iso,
-            user["id"] if user else None,
         ),
     )
 
@@ -149,8 +151,11 @@ def auth_api_key_create(
             "name": name,
             "prefix": prefix,
             "permission": permission,
+            "owner": owner or None,
             "message": (
-                f"API key '{name}' created with {permission} permissions.\n"
+                f"API key '{name}' created with {permission} permissions"
+                + (f" for '{owner}'" if owner else "")
+                + ".\n"
                 f"Raw key (copy now, will not be shown again):\n{raw_key}"
             ),
         },
@@ -255,6 +260,7 @@ def auth_api_key_update(
             "name": updated["name"],
             "prefix": updated["prefix"],
             "permission": updated["permission"],
+            "owner": updated.get("owner") or "",
             "expires_at": updated.get("expires_at") or "",
             "message": f"API key '{updated['name']}' updated.",
         },

@@ -209,24 +209,16 @@ class TestAssignEndpoint:
     def test_readonly_key_cannot_assign(
         self, doi_client: TestClient, auth_db: LighterDB
     ) -> None:
-        """Read-only API key for a non-admin user → 403."""
+        """Read-only API key → 403."""
         import secrets
         from lighterauth.api_key import generate_api_key
-        from lighterauth.password import hash_password
 
         now = "2026-01-01T00:00:00+00:00"
-        user_id = "regular-user-assign-test"
-        hashed = hash_password("pass")
-        auth_db.execute(
-            "INSERT INTO users (id, email, username, password, role, status, "
-            "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (user_id, "regular@t.com", "regular", hashed, "user", "active", now, now),
-        )
         raw_key, prefix, hashed_key = generate_api_key()
         auth_db.execute(
-            "INSERT INTO api_keys (id, name, key, prefix, permission, "
-            "created_at, updated_at, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            ("ak_ro_test_" + secrets.token_hex(8), "ro-key", hashed_key, prefix, "read_only", now, now, user_id),
+            "INSERT INTO api_keys (id, name, key, prefix, permission, owner, "
+            "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("ak_ro_test_" + secrets.token_hex(8), "ro-key", hashed_key, prefix, "read_only", "test-ro", now, now),
         )
 
         resp = doi_client.post(
@@ -315,24 +307,16 @@ class TestModifyEndpoint:
     def test_readonly_key_cannot_modify(
         self, doi_client: TestClient, doi_crud_svc, auth_db: LighterDB
     ) -> None:
-        """Read-only API key for non-admin user → 403."""
+        """Read-only API key → 403."""
         import secrets
         from lighterauth.api_key import generate_api_key
-        from lighterauth.password import hash_password
 
         now = "2026-01-01T00:00:00+00:00"
-        user_id = "regular-user-mod-test"
-        hashed = hash_password("pass")
-        auth_db.execute(
-            "INSERT INTO users (id, email, username, password, role, status, "
-            "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (user_id, "regular-mod@t.com", "regular-mod", hashed, "user", "active", now, now),
-        )
         raw_key, prefix, hashed_key = generate_api_key()
         auth_db.execute(
-            "INSERT INTO api_keys (id, name, key, prefix, permission, "
-            "created_at, updated_at, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            ("ak_ro_mod_" + secrets.token_hex(8), "ro-mod-key", hashed_key, prefix, "read_only", now, now, user_id),
+            "INSERT INTO api_keys (id, name, key, prefix, permission, owner, "
+            "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("ak_ro_mod_" + secrets.token_hex(8), "ro-mod-key", hashed_key, prefix, "read_only", "test-ro-mod", now, now),
         )
 
         created = doi_crud_svc.assign("https://example.com")
@@ -386,24 +370,16 @@ class TestDeleteEndpoint:
     def test_readonly_key_cannot_delete(
         self, doi_client: TestClient, doi_crud_svc, auth_db: LighterDB
     ) -> None:
-        """Read-only API key for non-admin user → 403."""
+        """Read-only API key → 403."""
         import secrets
         from lighterauth.api_key import generate_api_key
-        from lighterauth.password import hash_password
 
         now = "2026-01-01T00:00:00+00:00"
-        user_id = "regular-user-del-test"
-        hashed = hash_password("pass")
-        auth_db.execute(
-            "INSERT INTO users (id, email, username, password, role, status, "
-            "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (user_id, "regular-del@t.com", "regular-del", hashed, "user", "active", now, now),
-        )
         raw_key, prefix, hashed_key = generate_api_key()
         auth_db.execute(
-            "INSERT INTO api_keys (id, name, key, prefix, permission, "
-            "created_at, updated_at, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            ("ak_ro_del_" + secrets.token_hex(8), "ro-del-key", hashed_key, prefix, "read_only", now, now, user_id),
+            "INSERT INTO api_keys (id, name, key, prefix, permission, owner, "
+            "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("ak_ro_del_" + secrets.token_hex(8), "ro-del-key", hashed_key, prefix, "read_only", "test-ro-del", now, now),
         )
 
         created = doi_crud_svc.assign("https://example.com")

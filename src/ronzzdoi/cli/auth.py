@@ -44,6 +44,10 @@ def register_subparser(subparsers: argparse._SubParsersAction) -> None:
         help="Permission level (default: read_only)",
     )
     create_parser.add_argument(
+        "--owner",
+        help="Free-text owner label (e.g. 'CI pipeline', 'Alice')",
+    )
+    create_parser.add_argument(
         "--expires-at",
         help="Expiration date (ISO 8601), e.g. 2027-01-01T00:00:00+00:00",
     )
@@ -97,6 +101,9 @@ def register_subparser(subparsers: argparse._SubParsersAction) -> None:
 def _cmd_create(args: argparse.Namespace, client: RonzzdoiClient) -> None:
     """Handle ``auth api_key create``."""
     body: dict[str, Any] = {"name": args.name, "permission": args.permission}
+    owner = getattr(args, "owner", None)
+    if owner:
+        body["owner"] = owner
     if args.expires_at:
         body["expires_at"] = args.expires_at
 
@@ -110,6 +117,7 @@ def _cmd_create(args: argparse.Namespace, client: RonzzdoiClient) -> None:
     print(f"  ID:         {result.get('id', '?')}")
     print(f"  Name:       {result.get('name', '?')}")
     print(f"  Permission: {result.get('permission', '?')}")
+    print(f"  Owner:      {result.get('owner', '-')}")
     print(f"  Key:        {result.get('key', '?')}")
     print(f"  Prefix:     {result.get('prefix', '?')}")
     if expires := result.get("expires_at"):
@@ -137,16 +145,17 @@ def _cmd_list(args: argparse.Namespace, client: RonzzdoiClient) -> None:
         print("No API keys found.")
         return
 
-    print(f"{'ID':<30} {'Name':<20} {'Permission':<12} {'Prefix':<10} {'Expires':<25} {'Created':<25}")
-    print("-" * 122)
+    print(f"{'ID':<30} {'Name':<18} {'Permission':<10} {'Owner':<18} {'Prefix':<10} {'Expires':<22} {'Created':<22}")
+    print("-" * 130)
     for key in keys:
         print(
             f"{key.get('id', '?'):<30} "
-            f"{key.get('name', '?'):<20} "
-            f"{key.get('permission', '?'):<12} "
+            f"{key.get('name', '?'):<18} "
+            f"{key.get('permission', '?'):<10} "
+            f"{(key.get('owner') or '-'):<18} "
             f"{key.get('prefix', '?'):<10} "
-            f"{(key.get('expires_at') or '-'):<25} "
-            f"{(key.get('created_at') or '-'):<25}"
+            f"{(key.get('expires_at') or '-'):<22} "
+            f"{(key.get('created_at') or '-'):<22}"
         )
 
 

@@ -36,8 +36,8 @@ class TestRequireWritePermission:
         )
         assert resp.status_code == 200, resp.text
         data = resp.json()
-        assert data["user_id"] == "admin-test-001"
-        assert data["role"] == "administrator"
+        assert data["user_id"] == "test-admin"
+        assert data["permission"] == "admin"
 
     def test_readonly_key_rejected(self, client: TestClient, admin_api_key_readonly: str) -> None:
         """POST with a read-only API key → 403."""
@@ -56,8 +56,8 @@ class TestRequireWritePermission:
         )
         assert resp.status_code == 200, resp.text
         data = resp.json()
-        assert data["user_id"] == "admin-test-001"
-        assert data["role"] == "administrator"
+        assert data["user_id"] == "test-editor"
+        assert data["permission"] == "edit"
 
 
 class TestRequireAdminPermission:
@@ -76,8 +76,8 @@ class TestRequireAdminPermission:
         )
         assert resp.status_code == 200, resp.text
         data = resp.json()
-        assert data["user_id"] == "admin-test-001"
-        assert data["role"] == "administrator"
+        assert data["user_id"] == "test-admin"
+        assert data["permission"] == "admin"
 
     def test_readonly_key_rejected(self, client: TestClient, admin_api_key_readonly: str) -> None:
         """GET /api/test/admin with read-only key → 403."""
@@ -108,7 +108,7 @@ class TestRequirePermission:
             headers={"Authorization": f"Bearer {admin_api_key_admin}"},
         )
         assert resp.status_code == 200, resp.text
-        assert resp.json()["user_id"] == "admin-test-001"
+        assert resp.json()["user_id"] == "test-admin"
 
     def test_admin_rejects_edit_key(self, client: TestClient, admin_api_key_edit: str) -> None:
         """require_permission('admin') rejects edit key → 403."""
@@ -126,7 +126,7 @@ class TestRequirePermission:
             headers={"Authorization": f"Bearer {admin_api_key_edit}"},
         )
         assert resp.status_code == 200, resp.text
-        assert resp.json()["user_id"] == "admin-test-001"
+        assert resp.json()["user_id"] == "test-editor"
 
     def test_edit_passes_admin_key(self, client: TestClient, admin_api_key_admin: str) -> None:
         """require_permission('edit') passes with admin key (hierarchy)."""
@@ -135,7 +135,7 @@ class TestRequirePermission:
             headers={"Authorization": f"Bearer {admin_api_key_admin}"},
         )
         assert resp.status_code == 200, resp.text
-        assert resp.json()["user_id"] == "admin-test-001"
+        assert resp.json()["user_id"] == "test-admin"
 
     def test_edit_rejects_readonly_key(self, client: TestClient, admin_api_key_readonly: str) -> None:
         """require_permission('edit') rejects read_only key → 403."""

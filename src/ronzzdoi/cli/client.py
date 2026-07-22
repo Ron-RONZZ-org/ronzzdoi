@@ -62,7 +62,7 @@ class RonzzdoiClient:
 
     def __init__(
         self,
-        server_url: str = "https://doi.ronzz.org:8001",
+        server_url: str = "http://127.0.0.1:8000",
         api_key: str = "",
         *,
         client: httpx.Client | None = None,
