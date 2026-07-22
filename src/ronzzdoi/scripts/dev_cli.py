@@ -115,14 +115,14 @@ def _seed_data(data_dir: str | None) -> None:
 
     now = datetime.now(timezone.utc).isoformat()
 
-    # Create admin user
+    # Create admin user (key-only auth; password is unused but schema-required)
     user_id = "user_dev_admin_001"
-    hashed = hash_password("admin123")
+    _dummy = hash_password(secrets.token_urlsafe(32))
     db.execute(
         "INSERT INTO users (id, email, username, password, role, status, "
         "created_at, updated_at) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (user_id, "admin@ronzz.org", "admin", hashed, "administrator", "active", now, now),
+        (user_id, "admin@ronzz.org", "admin", _dummy, "administrator", "active", now, now),
     )
 
     # Create admin API key

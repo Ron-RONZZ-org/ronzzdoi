@@ -49,19 +49,98 @@ ronzzdoi extends [lightercore](https://github.com/Ron-RONZZ-org/lightercore) for
                     └─────────────┘
 ```
 
+## Authentication
+
+ronzzdoi uses **key-only authentication** — no passwords or login forms. Every API request requires an `Authorization: Bearer <key>` header. Keys have three permission tiers:
+
+| Tier | Read ops | Write ops | Auth mgmt |
+|------|----------|-----------|-----------|
+| `read_only` | ✅ | ❌ | ❌ |
+| `edit` | ✅ | ✅ | ❌ |
+| `admin` | ✅ | ✅ | ✅ |
+
 ## Quick Start
 
+### Prerequisites
+
+Sibling repos required alongside `ronzzdoi/`:
+
 ```bash
-# Prerequisites: lightercore checked out alongside ronzzdoi
-git clone https://github.com/Ron-RONZZ-org/ronzzdoi.git
-cd ronzzdoi
-
-# Install with uv (recommended)
-uv pip install -e "../lightercore" -e .
-
-# Or with pip
-pip install -e ../lightercore -e .
+ls ../lightercore ../lighterauth   # must exist
 ```
+
+### Install
+
+```bash
+uv pip install -e "../lightercore" -e "../lighterauth" -e ".[dev]"
+```
+
+### Start dev server with seed data
+
+```bash
+ronzzdoi-dev --seed
+```
+
+This creates an admin API key and a read-only API key, then starts the server on `http://127.0.0.1:8000`. Copy the admin key from the output — it's shown only once.
+
+### Use the CLI
+
+Open another terminal:
+
+```bash
+export RONZZDOI_API_KEY="rnzz_a_abc123..."   # the admin key from above
+
+ronzzdoi help
+ronzzdoi doi search
+ronzzdoi doi assign https://example.com --title "My Example" --type external
+ronzzdoi doi search quantum
+```
+
+### Use the GUI
+
+```bash
+cd web && npm install && npm run dev
+```
+
+Open `http://127.0.0.1:6005` in your browser, paste your API key, then type `!help`, `!doi search`, etc.
+
+## Testing
+
+### Backend unit + integration tests (no server needed)
+
+```bash
+# Run all 352 tests
+uv run pytest tests/ -v
+
+# Run a specific test file
+uv run pytest tests/test_doi_service.py -v
+
+# Run with coverage
+uv run pytest tests/ --cov=src/ronzzdoi
+```
+
+### Frontend component tests
+
+```bash
+cd web && npm run test
+# 19 tests across 2 test files (parser, commandExecutor)
+```
+
+### E2E browser smoke test (requires both servers running)
+
+```bash
+# Terminal 1: start backend
+ronzzdoi-dev --port 8000
+
+# Terminal 2: start frontend
+cd web && npm run dev
+
+# Terminal 3: run smoke test
+CHROME_PATH=$(npx playwright install --list 2>/dev/null | grep chromium | head -1 | awk '{print $2}') \
+  npx node tests/e2e_gui_smoke.mjs
+```
+
+The E2E test opens the GUI in headless Chromium, types `!help`, `!doi assign`, `!doi search`, `!citation show`, asserts tabs open with content, and fails on any JS console error.
 
 ## Development
 
@@ -72,8 +151,14 @@ uv pip install -e ".[dev]"
 # Run tests
 uv run pytest tests/
 
-# Start dev server
-uv run ronzzdoi-dev
+# Start dev server (full mode, both internal + public APIs)
+ronzzdoi-dev
+
+# Start dev server with seed data (creates API keys automatically)
+ronzzdoi-dev --seed
+
+# Start in public-only mode
+ronzzdoi-dev --mode public --port 9000
 ```
 
 ## License
