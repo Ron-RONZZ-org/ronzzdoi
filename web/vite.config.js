@@ -1,12 +1,12 @@
 import { defineConfig } from "vitest/config";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 
-const backendPort = process.env.RONZZDOI_PORT || 8000;
+const backendPort = process.env.RONZZDOI_PORT || 8011;
 
 export default defineConfig({
   plugins: [svelte({ compilerOptions: { dev: true } })],
   server: {
-    port: 6005,
+    port: 6025,
     proxy: {
       "/api": {
         target: `http://localhost:${backendPort}`,

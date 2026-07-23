@@ -196,9 +196,9 @@ def test_delete_request() -> None:
 
 
 def test_default_server_url() -> None:
-    """Default server URL is http://127.0.0.1:8000 (dev-friendly)."""
+    """Default server URL is http://127.0.0.1:8011 (dev-friendly)."""
     client = RonzzdoiClient(api_key="test")
-    assert client.server_url == "http://127.0.0.1:8000"
+    assert client.server_url == "http://127.0.0.1:8011"
 
 
 def test_custom_server_url() -> None:

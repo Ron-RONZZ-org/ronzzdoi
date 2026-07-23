@@ -15,7 +15,7 @@ import { strict as assert } from "assert";
 
 // ── Config ────────────────────────────────────────────────────────────────
 
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://127.0.0.1:6005";
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://127.0.0.1:6025";
 const CHROME_PATH = process.env.CHROME_PATH || "chromium";
 
 // ── Shared state ──────────────────────────────────────────────────────────
