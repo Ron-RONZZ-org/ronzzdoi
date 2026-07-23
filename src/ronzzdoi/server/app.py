@@ -13,18 +13,14 @@ Usage::
     import uvicorn
     from ronzzdoi.server.app import create_app
 
-    # Development — single process, both internal and public routes
-    app = create_app(mode="full")
-    uvicorn.run(app, host="127.0.0.1", port=8000)
-
     # Production — two separate processes
     # Process 1: internal API (auth-protected, loopback only)
     app_int = create_app(mode="internal")
-    uvicorn.run(app_int, host="127.0.0.1", port=8001)
+    uvicorn.run(app_int, host="127.0.0.1", port=8011)
 
     # Process 2: public API (rate-limited, 0.0.0.0)
     app_pub = create_app(mode="public")
-    uvicorn.run(app_pub, host="0.0.0.0", port=8002)
+    uvicorn.run(app_pub, host="0.0.0.0", port=8012)
 """
 
 from __future__ import annotations
@@ -50,7 +46,7 @@ from ronzzdoi.server.doi_routes import mount_doi_routes, register_doi_redirect
 from ronzzdoi.server.search_routes import mount_search_routes
 from ronzzdoi.server.public_routes import mount_public_routes
 
-_DEFAULT_PORT = 8000
+_DEFAULT_PORT = 8011
 """Default port for the API server."""
 
 _APP_TITLE = "ronzzdoi API"
