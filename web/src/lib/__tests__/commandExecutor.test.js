@@ -13,8 +13,8 @@ describe("deriveIdKey", () => {
   });
 
   it("derives idKey for doi search list", () => {
-    const key = deriveIdKey("list", { results: [] }, ["doi", "search", "test"], { mode: "semantical" });
-    expect(key).toBe("list-doi-search-test-semantical");
+    const key = deriveIdKey("doi-list", { results: [] }, ["doi", "search", "test"], { mode: "semantical" });
+    expect(key).toBe("doi-list-search-test-semantical");
   });
 
   it("derives idKey for auth list", () => {
@@ -33,7 +33,7 @@ describe("deriveIdKey", () => {
   });
 
   it("uses default mode when not specified for doi search", () => {
-    const key = deriveIdKey("list", { results: [] }, ["doi", "search"], {});
-    expect(key).toBe("list-doi-search--semantical");
+    const key = deriveIdKey("doi-list", { results: [] }, ["doi", "search"], {});
+    expect(key).toBe("doi-list-search--semantical");
   });
 });

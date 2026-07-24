@@ -334,7 +334,7 @@ def doi_search(
     items = [_record_to_response(r) for r in results]
 
     return {
-        "type": "list",
+        "type": "doi-list",
         "title": f"DOI Search{' - ' + query if query else ''}",
         "data": {
             "results": items,

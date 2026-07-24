@@ -4,6 +4,7 @@
   import HomeTab from "./HomeTab.svelte";
   import DetailTab from "./DetailTab.svelte";
   import ListTab from "./ListTab.svelte";
+  import DoiListTab from "./DoiListTab.svelte";
   import StatusPopup from "./StatusPopup.svelte";
   import ErrorPopup from "./ErrorPopup.svelte";
   import LoadingPopup from "./LoadingPopup.svelte";
@@ -36,6 +37,7 @@
     status: StatusPopup,
     detail: DetailTab,
     list: ListTab,
+    "doi-list": DoiListTab,
     error: ErrorPopup,
     form: FormTab,
   };
@@ -136,6 +138,8 @@
           <DetailTab data={tab.data} tabId={tab.id} />
         {:else if tab.type === "list"}
           <ListTab data={tab.data} tabId={tab.id} />
+        {:else if tab.type === "doi-list"}
+          <DoiListTab data={tab.data} tabId={tab.id} />
         {:else if tab.type === "status"}
           <StatusPopup data={tab.data} />
         {:else if tab.type === "error"}
