@@ -33,6 +33,13 @@
         return;
       }
 
+      // Close loading tabs before showing the result (belt: the popup.show
+      // path does this automatically, but tabStore.open path must too —
+      // otherwise Escape later reactivates the non-closable loading zombie)
+      for (const t of tabStore.tabs) {
+        if (t.type === "loading") tabStore.close(t.id);
+      }
+
       // Derive id_key locally from type + data + tokens
       const { tokens, flags } = parseSimple(trimmed);
       const idKey = deriveIdKey(result.type, result.data, tokens, flags);

@@ -15,25 +15,27 @@
   import ConfirmDialog from "@lightercore/ui/ConfirmDialog.svelte";
   import { deriveIdKey } from "./commandExecutor.js";
 
-  let { data = {}, tabId } = $props();
-  let d = $derived(data || {});
+  let { data: _data = {}, tabId } = $props();
 
-  // Items — local writable copy so deleted items can be removed
-  let items = $state(
-    d.results || d.items || d.data || d.keys || d.entries || [],
-  );
+  // Items — local writable copy so deleted items can be removed.
+  // Syncs from the data prop reactively via $effect (avoid $state()
+  // with a reactive initializer — that triggers state_referenced_locally).
+  let items = $state([]);
 
   // Re-initialize from data prop when it changes (new search results)
   $effect(() => {
     const fresh =
-      d.results || d.items || d.data || d.keys || d.entries || [];
+      _data.results || _data.items || _data.data || _data.keys || _data.entries || [];
     if (fresh.length > 0) {
       items = fresh;
     }
   });
 
+  // Derived convenience accessor for non-items fields (total, query, etc.)
+  let data = $derived(_data);
+
   // ── View-mode focus ────────────────────────────────────────────
-  let focusedIndex = $state(items.length > 0 ? 0 : -1);
+  let focusedIndex = $state(-1);
   let focusedDoi = $derived(
     focusedIndex >= 0 && focusedIndex < items.length
       ? items[focusedIndex].doi || items[focusedIndex].id
@@ -261,6 +263,8 @@
       case "v":
         if (plain && !sel.selectionMode) {
           sel.toggleSelectionMode();
+          // Sync focus: preserve current row focus when entering selection mode
+          if (focusedIndex < 0) focusedIndex = 0;
           e.preventDefault();
         }
         return;
@@ -272,10 +276,17 @@
         }
         if (sel.selectionMode) {
           sel.toggleSelectionMode();
+          // Restore view-mode focus to nearest valid item
+          focusedIndex = Math.min(focusedIndex, filteredItems.length - 1);
+          if (focusedIndex < 0 && filteredItems.length > 0) focusedIndex = 0;
           e.preventDefault();
           return;
         }
-        // Let TabView handle tab close
+        // Close the current tab
+        if (tabId) {
+          tabStore.close(tabId);
+        }
+        e.preventDefault();
         return;
       case "ArrowDown":
         if (plain && !sel.selectionMode && filteredItems.length > 0) {
@@ -387,18 +398,19 @@
         >{sel.numSelected} selected</span
       >
       <button class="btn-small" onclick={() => sel.toggleSelectionMode()}
-        >Cancel</button
+        title="Exit selection mode (Esc)">Cancel</button
       >
       <button
         class="btn-small danger"
         onclick={requestDeleteBatch}
         disabled={sel.numSelected === 0}
-        >Delete</button
+        title="Delete selected DOIs">Delete</button
       >
     {:else}
-      <button class="btn-small" onclick={handleNew}>+ New</button>
+      <button class="btn-small" onclick={handleNew} title="New DOI (N)">+ New</button>
       <button
         class="btn-small"
+        title="Toggle search (/)"
         onclick={() => {
           showSearch = true;
           requestAnimationFrame(() =>
@@ -408,7 +420,7 @@
         >/ Search</button
       >
       <button class="btn-small" onclick={() => sel.toggleSelectionMode()}
-        >v Select</button
+        title="Toggle selection mode (V)">v Select</button
       >
     {/if}
   </div>
@@ -440,9 +452,9 @@
         }}
       >
         {#if sel.selectionMode}
-          <span class="check-col"
-            >{selected ? "☑" : "☐"}</span
-          >
+          <span class="check-col" aria-hidden="true">
+            <span class="checkbox" class:checked={selected}>{selected ? "✓" : ""}</span>
+          </span>
         {/if}
         <span class="title-col"
           >{item.title || "(untitled)"}</span
@@ -484,10 +496,10 @@
     {/each}
   </div>
 
-  {#if d.total !== undefined}
+  {#if data.total !== undefined}
     <div class="pagination-info">
-      Showing {filteredItems.length} of {d.total} result
-      {d.total !== 1 ? "s" : ""}
+      Showing {filteredItems.length} of {data.total} result
+      {data.total !== 1 ? "s" : ""}
     </div>
   {/if}
 </div>
@@ -600,9 +612,28 @@
   }
 
   .check-col {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.8rem;
     flex-shrink: 0;
-    width: 1.2rem;
-    color: #7c7c9a;
+  }
+  .checkbox {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    border: 1.5px solid #7c7c9a;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    color: #e0e0e0;
+    background: transparent;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .checkbox.checked {
+    background: #4a6fa5;
+    border-color: #4a6fa5;
   }
 
   .title-col {

@@ -21,9 +21,9 @@
   <header class="app-header">
     <span class="app-title">ronzzdoi</span>
     <span class="header-spacer"></span>
+    <AuthBanner />
   </header>
 
-  <AuthBanner />
   <BannerContainer />
   <TabView />
 </main>

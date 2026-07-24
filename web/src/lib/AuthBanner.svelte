@@ -42,22 +42,17 @@
   .auth-banner {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.25rem 0.75rem;
-    background: #1e3a2e;
-    border-bottom: 1px solid #3a7a4a;
+    gap: 0.3rem;
     font-family: monospace;
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     flex-shrink: 0;
-    animation: bannerSlideIn 0.2s ease;
   }
   .auth-banner-icon {
     color: #8fdb9f;
-    font-size: 0.78rem;
+    font-size: 0.72rem;
   }
   .auth-banner-text {
     color: #8fdb9f;
-    flex: 1;
   }
   .auth-clear-btn {
     background: transparent;
@@ -65,16 +60,12 @@
     border-radius: 3px;
     color: #db8f8f;
     font-family: monospace;
-    font-size: 0.7rem;
-    padding: 0.1rem 0.4rem;
+    font-size: 0.65rem;
+    padding: 0.05rem 0.35rem;
     cursor: pointer;
     transition: background 0.1s;
   }
   .auth-clear-btn:hover {
     background: #3a1e1e;
-  }
-  @keyframes bannerSlideIn {
-    from { opacity: 0; max-height: 0; padding: 0 0.75rem; }
-    to   { opacity: 1; max-height: 24px; padding: 0.25rem 0.75rem; }
   }
 </style>
