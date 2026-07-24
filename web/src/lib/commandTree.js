@@ -4,6 +4,11 @@
  * and is served via ``GET /api/v1/command/tree``.
  *
  * There is NO hardcoded fallback — the only source of truth is the backend.
+ *
+ * Following lighterbird/semantika pattern: auto-init on module load via
+ * module-level ``initCommandTree()`` call below.  The tree starts empty;
+ * the dynamic fetch replaces it when the response arrives (typically
+ * <100 ms on localhost).
  */
 
 /** @type {CommandNode[]} */
@@ -24,6 +29,9 @@ export async function initCommandTree() {
     // The app degrades gracefully.
   }
 }
+
+// Auto-init on module load — matches lighterbird/semantika pattern.
+initCommandTree();
 
 /** Build a flat list of all root-level command names. */
 export function getRootNames() {
