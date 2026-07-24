@@ -132,39 +132,7 @@
           </button>
         </div>
       </div>
-    {:else}
-      <div class="auth-ok">
-        <span class="auth-ok-icon">✓</span>
-        <span class="auth-ok-text">Authenticated</span>
-        <button
-          class="auth-clear-btn"
-          onclick={() => {
-            localStorage.removeItem("ronzzdoi_api_key");
-            isAuthenticated = false;
-          }}
-        >
-          Clear Key
-        </button>
-      </div>
     {/if}
-  </div>
-
-  <!-- Available commands hint -->
-  <div class="commands-hint">
-    <div class="hint-section">
-      <span class="hint-category">DOI</span>
-      <code>!doi assign</code> <code>!doi resolve</code> <code>!doi modify</code>
-      <code>!doi search</code> <code>!doi merge</code> <code>!doi delete</code>
-    </div>
-    <div class="hint-section">
-      <span class="hint-category">Citation</span>
-      <code>!citation show</code> <code>!citation styles</code>
-    </div>
-    <div class="hint-section">
-      <span class="hint-category">Auth</span>
-      <code>!auth api_key list</code> <code>!auth api_key create</code>
-      <code>!auth api_key update</code> <code>!auth api_key delete</code>
-    </div>
   </div>
 
   <!-- Input area -->
@@ -257,62 +225,6 @@
     white-space: nowrap;
   }
   .key-set-btn:hover { background: #3a6a4a; }
-
-  .auth-ok {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    margin: 0.5rem auto;
-    padding: 0.4rem 0.8rem;
-    background: #1e3a2e;
-    border: 1px solid #3a7a4a;
-    border-radius: 4px;
-    max-width: 300px;
-  }
-  .auth-ok-icon { color: #8fdb9f; font-size: 0.9rem; }
-  .auth-ok-text { color: #8fdb9f; font-family: monospace; font-size: 0.82rem; }
-  .auth-clear-btn {
-    background: transparent;
-    border: 1px solid #5a3a3a;
-    color: #db8f8f;
-    font-family: monospace;
-    font-size: 0.72rem;
-    padding: 0.15rem 0.4rem;
-    border-radius: 3px;
-    cursor: pointer;
-  }
-  .auth-clear-btn:hover { background: #3a1e1e; }
-
-  /* ── Command hints ─────────────────────────── */
-  .commands-hint {
-    max-width: 600px;
-    margin: 0.5rem auto;
-    padding: 0 1rem;
-    text-align: center;
-    flex-shrink: 0;
-  }
-  .hint-section {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    margin: 0.25rem;
-    padding: 0.25rem 0.5rem;
-    background: #222;
-    border-radius: 4px;
-    font-size: 0.75rem;
-  }
-  .hint-category {
-    color: #7c7c9a;
-    font-family: monospace;
-    font-weight: 600;
-    margin-right: 0.2rem;
-  }
-  .hint-section code {
-    color: #b0b0c0;
-    font-family: monospace;
-    font-size: 0.72rem;
-  }
 
   .input-container {
     padding: 0.5rem 1rem 1rem;

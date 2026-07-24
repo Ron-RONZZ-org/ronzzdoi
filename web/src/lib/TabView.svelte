@@ -8,6 +8,8 @@
   import ErrorPopup from "./ErrorPopup.svelte";
   import LoadingPopup from "./LoadingPopup.svelte";
   import FormTab from "./FormTab.svelte";
+  import HelpPopup from "./HelpPopup.svelte";
+  import KeyboardShortcutOverlay from "./KeyboardShortcutOverlay.svelte";
 
   let showGlobalHelp = $state(false);
   let inputFocused = $state(false);
@@ -38,6 +40,7 @@
     list: ListTab,
     error: ErrorPopup,
     form: FormTab,
+    help: HelpPopup,
   };
 
   // Tab types that manage their own Escape
@@ -102,6 +105,16 @@
       return;
     }
 
+    // H / h — toggle global help overlay
+    if (e.key === "h" || e.key === "H") {
+      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable)) {
+        return;
+      }
+      e.preventDefault();
+      showGlobalHelp = !showGlobalHelp;
+      return;
+    }
+
     // Q — close current tab
     if ((e.key === "q" || e.key === "Q") && !tabStore.isHome) {
       if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable)) {
@@ -142,6 +155,8 @@
           <ErrorPopup data={tab.data} />
         {:else if tab.type === "form"}
           <FormTab data={tab.data} tabId={tab.id} />
+        {:else if tab.type === "help"}
+          <HelpPopup data={tab.data} />
         {:else}
           <StatusPopup data={tab.data} />
         {/if}
@@ -192,6 +207,8 @@
             <kbd>i</kbd> input
           {/if}
           <span class="hint-sep">·</span>
+          <kbd>h</kbd> help
+          <span class="hint-sep">·</span>
         {/if}
         {#if !tabStore.isHome}
           <span class="hint-sep">·</span>
@@ -208,8 +225,14 @@
         {:else}
           <kbd>i</kbd> input
         {/if}
+        <span class="hint-sep">·</span>
+        <kbd>h</kbd> help
       </span>
     </div>
+  {/if}
+
+  {#if showGlobalHelp}
+    <KeyboardShortcutOverlay onDismiss={() => { showGlobalHelp = false; }} />
   {/if}
 </div>
 
@@ -225,6 +248,7 @@
       error: "⚠",
       loading: "⏳",
       form: "✏",
+      help: "?",
     };
     return icons[type] || "•";
   }

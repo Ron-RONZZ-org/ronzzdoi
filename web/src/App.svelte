@@ -5,26 +5,12 @@
   import { banner } from "@lightercore/ui/bannerStore.svelte.js";
   import TabView from "./lib/TabView.svelte";
   import LoadingPopup from "./lib/LoadingPopup.svelte";
+  import AuthBanner from "./lib/AuthBanner.svelte";
 
   // ── Loading state for command execution ───────────────────────────────
   // Managed via popup.showLoading / popup.close — no separate isLoading.
 
   // ── Global keyboard shortcuts (handled in TabView) ──────────────────
-
-  // ── Auth status indicator ────────────────────────────────────────────
-  let authKeyPrefix = $state("");
-
-  function updateAuthStatus() {
-    const key = localStorage.getItem("ronzzdoi_api_key") || "";
-    authKeyPrefix = key ? key.slice(0, 8) + "…" : "";
-  }
-
-  $effect(() => {
-    updateAuthStatus();
-    // Poll for auth changes (e.g. after !auth api_key create)
-    const interval = setInterval(updateAuthStatus, 3000);
-    return () => clearInterval(interval);
-  });
 </script>
 
 <svelte:window onbeforeunload={(e) => {
@@ -35,19 +21,9 @@
   <header class="app-header">
     <span class="app-title">ronzzdoi</span>
     <span class="header-spacer"></span>
-    {#if authKeyPrefix}
-      <span class="auth-indicator" title="API key active">
-        <span class="auth-dot"></span>
-        <span class="auth-key">{authKeyPrefix}</span>
-      </span>
-    {:else}
-      <span class="auth-indicator auth-missing" title="No API key configured">
-        <span class="auth-dot missing"></span>
-        <span class="auth-key">No key</span>
-      </span>
-    {/if}
   </header>
 
+  <AuthBanner />
   <BannerContainer />
   <TabView />
 </main>
@@ -96,22 +72,4 @@
     letter-spacing: 0.08em;
   }
   .header-spacer { flex: 1; }
-  .auth-indicator {
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-    font-family: monospace;
-    font-size: 0.72rem;
-    color: #7c7c9a;
-  }
-  .auth-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #4a8a4a;
-  }
-  .auth-dot.missing {
-    background: #8a4a4a;
-  }
-  .auth-missing .auth-key { color: #8a6a6a; }
 </style>
