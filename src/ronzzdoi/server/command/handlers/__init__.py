@@ -52,5 +52,6 @@ def check_permission(
 # Side-effect imports: each module registers its handlers as a
 # side effect of module-level ``@command()`` decorator evaluation.
 from ronzzdoi.server.command.handlers import auth  # noqa: F401
+from ronzzdoi.server.command.handlers import help  # noqa: F401
 from ronzzdoi.server.command.handlers import citation  # noqa: F401
 from ronzzdoi.server.command.handlers import doi  # noqa: F401

@@ -1,29 +1,59 @@
 """Dev CLI entry point for ronzzdoi.
 
-Provides ``ronzzdoi-dev`` command with options for mode, port, data
-directory, and seed data.
+Provides ``ronzzdoi-dev`` command which starts both internal (auth-protected)
+and public (rate-limited) API servers as separate processes, mirroring
+production setup.
 
 Usage::
 
-    ronzzdoi-dev --port 8080 --seed
+    ronzzdoi-dev --seed
     ronzzdoi-dev --data-dir /tmp/ronzzdoi-dev --seed
-    ronzzdoi-dev --mode public --port 9000
+    ronzzdoi-dev --port-int 8011 --port-pub 8012
 """
 
 from __future__ import annotations
 
 import argparse
+import multiprocessing
+import signal
 import sys
+from typing import NoReturn
+
+
+def _run_server(mode: str, host: str, port: int, data_dir: str | None) -> NoReturn:
+    """Start a single uvicorn server process.
+
+    Args:
+        mode: ``"internal"`` or ``"public"``.
+        host: Bind address.
+        port: Bind port.
+        data_dir: Data directory path or ``None`` for XDG default.
+    """
+    from ronzzdoi.server.app import create_app
+    import uvicorn
+
+    app = create_app(data_dir=data_dir, mode=mode)
+    uvicorn.run(app, host=host, port=port)
 
 
 def dev_main() -> None:
-    """Development server entry point."""
+    """Development server entry point.
+
+    Starts both internal (auth-protected) and public (rate-limited) API
+    servers as separate child processes.
+    """
     parser = argparse.ArgumentParser(prog="ronzzdoi-dev", description="ronzzdoi development server")
     parser.add_argument(
-        "--port",
+        "--port-int",
         type=int,
-        default=8000,
-        help="Server port (default: 8000)",
+        default=8011,
+        help="Internal API server port (default: 8011)",
+    )
+    parser.add_argument(
+        "--port-pub",
+        type=int,
+        default=8012,
+        help="Public API server port (default: 8012)",
     )
     parser.add_argument(
         "--host",
@@ -42,45 +72,72 @@ def dev_main() -> None:
         action="store_true",
         help="Seed the database with an admin key and a read-only key for development",
     )
-    parser.add_argument(
-        "--mode",
-        type=str,
-        default="full",
-        choices=["full", "internal", "public"],
-        help='Server mode: "full" (both internal+public, default), '
-        '"internal" (auth-protected only), or "public" (rate-limited only)',
-    )
 
     args = parser.parse_args()
 
-    # Create the app
-    try:
-        from ronzzdoi.server.app import create_app
-
-        app = create_app(data_dir=args.data_dir, mode=args.mode)
-    except Exception as exc:
-        print(f"Failed to create app: {exc}", file=sys.stderr)
-        sys.exit(1)
-
-    # Seed if requested
+    # Seed if requested (writes DB directly — no server needed)
     if args.seed:
         _seed_keys(args.data_dir)
         _seed_dois()
 
-    # Start uvicorn
+    # Start both server processes
+    processes: list[multiprocessing.Process] = []
     try:
-        import uvicorn
+        import uvicorn  # noqa: F401 — verify available before spawning
 
-        print(f"Starting ronzzdoi dev server (mode={args.mode}) on {args.host}:{args.port}")
-        if args.mode in ("full", "internal"):
-            print(f"API docs: http://{args.host}:{args.port}/api/docs")
-        uvicorn.run(app, host=args.host, port=args.port)
+        proc_int = multiprocessing.Process(
+            target=_run_server,
+            args=("internal", args.host, args.port_int, args.data_dir),
+            daemon=True,
+        )
+        proc_int.start()
+        processes.append(proc_int)
+
+        proc_pub = multiprocessing.Process(
+            target=_run_server,
+            args=("public", args.host, args.port_pub, args.data_dir),
+            daemon=True,
+        )
+        proc_pub.start()
+        processes.append(proc_pub)
+
+        print(f"ronzzdoi dev server started:")
+        print(f"  Internal API:  http://{args.host}:{args.port_int}  (auth-protected)")
+        print(f"  Public API:    http://{args.host}:{args.port_pub}  (rate-limited, no auth)")
+        print(f"  API docs:      http://{args.host}:{args.port_int}/api/docs")
+        print()
+        print("Press Ctrl+C to stop both servers.")
+
+        # Wait for either process to exit, then terminate the other
+        while True:
+            for p in processes:
+                p.join(timeout=0.5)
+                if not p.is_alive():
+                    print(
+                        f"\n  Server process exited unexpectedly (exit code {p.exitcode}).",
+                        file=sys.stderr,
+                    )
+                    _terminate_all(processes)
+                    sys.exit(1)
+
     except ImportError:
         print("uvicorn is required. Install with: uv pip install uvicorn", file=sys.stderr)
         sys.exit(1)
     except KeyboardInterrupt:
-        print("\nServer stopped.")
+        print("\nShutting down both servers...")
+        _terminate_all(processes)
         sys.exit(0)
+
+
+def _terminate_all(processes: list[multiprocessing.Process]) -> None:
+    """Terminate all server processes."""
+    for p in processes:
+        if p.is_alive():
+            p.terminate()
+            p.join(timeout=3)
+            if p.is_alive():
+                p.kill()
+                p.join(timeout=1)
 
 
 def _seed_keys(data_dir: str | None) -> None:
@@ -268,4 +325,3 @@ def _seed_dois() -> None:
     print(f"Seeded {count} sample DOIs of various types.")
     print("  Try: ronzzdoi doi search")
     print("  Try: ronzzdoi doi resolve <doi>")
-

@@ -1,6 +1,14 @@
 <script>
   /** Detail tab — renders a DOI/citation detail view.
    *
+   * Enhanced layout:
+   *   - Toolbar with action buttons (+ New, Copy DOI, Open URL, Modify, Merge, Tombstone)
+   *   - Title + type badge inline
+   *   - Metadata (author, year, publisher…) shown first
+   *   - Technical info (DOI, Status, Created, Updated…) collapsible at bottom
+   *   - Redirect history as subsection of Technical Info
+   *   - ConfirmDialog for tombstone
+   *
    * Props:
    *   data — response data from the backend
    *   tabId — tab identifier for tabStore operations
@@ -8,11 +16,30 @@
 
   import { tabStore } from "@lightercore/ui/tabStore.svelte.js";
   import { banner } from "@lightercore/ui/bannerStore.svelte.js";
+  import ConfirmDialog from "@lightercore/ui/ConfirmDialog.svelte";
 
   let { data = {}, tabId } = $props();
   let d = $derived(data || {});
 
-  // ── Language picker for multi-lingual titles ──────────────────────────
+  // ── DOI type badge ─────────────────────────────────────────────
+  const TYPE_BADGES = {
+    book: "📖 book",
+    film: "🎬 film",
+    article: "📄 article",
+    website: "🌐 website",
+    conference: "🎤 conference",
+    transcript: "📝 transcript",
+    presentation: "📊 presentation",
+    circulaire: "📋 circulaire",
+    rulebook: "📜 rulebook",
+    document: "📄 document",
+    media: "🎥 media",
+    external: "🔗 external",
+  };
+
+  let typeBadgeText = $derived(TYPE_BADGES[d.doi_type] || d.doi_type || "external");
+
+  // ── Language picker for multi-lingual titles ──────────────────
   let titleData = $derived(d.title || {});
   let titleLanguages = $derived(
     typeof titleData === "object" && !Array.isArray(titleData)
@@ -31,7 +58,36 @@
           : "",
   );
 
-  // ── Actions ───────────────────────────────────────────────────────────
+  // ── Metadata entries (from metadata_json) ─────────────────────
+  let metadataEntries = $derived.by(() => {
+    const meta = d.metadata_json || d.metadata || {};
+    if (typeof meta === "string") {
+      try { return Object.entries(JSON.parse(meta)); } catch { return []; }
+    }
+    return Object.entries(meta || {});
+  });
+
+  // ── Technical info fields (shown in collapsible section) ──────
+  let techFields = $derived([
+    { key: "DOI", value: d.doi },
+    { key: "DOI Type", value: d.doi_type },
+    { key: "Status", value: d.status || "active" },
+    { key: "Created", value: d.created_at },
+    { key: "Updated", value: d.updated_at },
+    { key: "Owner", value: d.owner },
+  ].filter((f) => f.value != null && f.value !== ""));
+
+  // ── Redirect history ──────────────────────────────────────────
+  let redirectHistory = $derived(d.redirect_history || []);
+
+  // ── Actions ───────────────────────────────────────────────────
+
+  function handleNew() {
+    tabStore.open("form", "Assign DOI", {
+      form: "doi-assign",
+      initialData: {},
+    }, { idKey: "form-doi-assign" });
+  }
 
   function copyDoi() {
     if (d.doi) {
@@ -50,92 +106,145 @@
     if (d.doi) {
       tabStore.open("form", "Modify DOI: " + d.doi, {
         form: "doi-modify",
-        initialData: { doi: d.doi, url: d.target_url || "", title: typeof d.title === "string" ? d.title : JSON.stringify(d.title || {}), doi_type: d.doi_type || "", metadata: d.metadata_json ? JSON.stringify(d.metadata_json, null, 2) : "{}" },
+        initialData: {
+          doi: d.doi,
+          url: d.target_url || "",
+          title: typeof d.title === "string" ? d.title : JSON.stringify(d.title || {}),
+          doi_type: d.doi_type || "",
+          metadata: d.metadata_json ? JSON.stringify(d.metadata_json, null, 2) : "{}",
+        },
       }, { idKey: `form-doi-modify-${d.doi}` });
     }
   }
 
-  function confirmDelete() {
-    if (d.doi && confirm(`Are you sure you want to tombstone "${d.doi}"?`)) {
-      // Dispatch delete command
-      const apiKey = localStorage.getItem("ronzzdoi_api_key") || "";
-      fetch("/api/v1/command", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-        },
-        body: JSON.stringify({ tokens: ["doi", "delete", d.doi], flags: {}, raw_input: `!doi delete ${d.doi}` }),
-      })
-        .then((resp) => resp.json())
-        .then((result) => {
-          if (result.type === "error") {
-            banner.show(result.data?.message || "Delete failed", "error", 5000);
-          } else {
-            banner.show("DOI tombstoned: " + d.doi, "success");
-            if (tabId) tabStore.close(tabId);
-          }
-        })
-        .catch((err) => {
-          banner.show("Error: " + err.message, "error", 5000);
-        });
-    }
-  }
+  // ── Merge ─────────────────────────────────────────────────────
+  let mergeTarget = $state("");
 
   function confirmMerge() {
-    // For merge, additional input is needed — open form
     if (!d.doi) return;
-    const target = prompt("Merge this DOI into target DOI (enter target):");
-    if (target && target.trim()) {
-      const apiKey = localStorage.getItem("ronzzdoi_api_key") || "";
-      fetch("/api/v1/command", {
+    mergeTarget = prompt("Merge this DOI into target DOI (enter target):");
+    if (mergeTarget && mergeTarget.trim()) {
+      executeMerge(mergeTarget.trim());
+    }
+    mergeTarget = "";
+  }
+
+  async function executeMerge(target) {
+    const apiKey = localStorage.getItem("ronzzdoi_api_key") || "";
+    try {
+      const resp = await fetch("/api/v1/command", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
         },
-        body: JSON.stringify({ tokens: ["doi", "merge", d.doi, target.trim()], flags: {}, raw_input: `!doi merge ${d.doi} ${target.trim()}` }),
-      })
-        .then((resp) => resp.json())
-        .then((result) => {
-          if (result.type === "error") {
-            banner.show(result.data?.message || "Merge failed", "error", 5000);
-          } else {
-            banner.show("DOI merged", "success");
-            if (tabId) tabStore.close(tabId);
-          }
-        })
-        .catch((err) => {
-          banner.show("Error: " + err.message, "error", 5000);
-        });
+        body: JSON.stringify({
+          tokens: ["doi", "merge", d.doi, target],
+          flags: {},
+          raw_input: `!doi merge ${d.doi} ${target}`,
+        }),
+      });
+      const result = await resp.json();
+      if (result.type === "error") {
+        banner.show(result.data?.message || "Merge failed", "error", 5000);
+      } else {
+        banner.show("DOI merged", "success");
+        if (tabId) tabStore.close(tabId);
+      }
+    } catch (err) {
+      banner.show("Error: " + err.message, "error", 5000);
     }
   }
 
-  // ── Metadata renderer ─────────────────────────────────────────────────
-  let metadataEntries = $derived.by(() => {
-    const meta = d.metadata_json || {};
-    if (typeof meta === "string") {
-      try { return Object.entries(JSON.parse(meta)); } catch { return []; }
+  // ── Tombstone (delete) ────────────────────────────────────────
+  let confirmDelete = $state(false);
+
+  function requestTombstone() {
+    if (!d.doi) return;
+    confirmDelete = true;
+  }
+
+  async function executeTombstone() {
+    confirmDelete = false;
+    if (!d.doi) return;
+    const apiKey = localStorage.getItem("ronzzdoi_api_key") || "";
+    try {
+      const resp = await fetch("/api/v1/command", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+        },
+        body: JSON.stringify({
+          tokens: ["doi", "delete", d.doi],
+          flags: {},
+          raw_input: `!doi delete ${d.doi}`,
+        }),
+      });
+      const result = await resp.json();
+      if (result.type === "error") {
+        banner.show(result.data?.message || "Delete failed", "error", 5000);
+      } else {
+        banner.show("DOI tombstoned: " + d.doi, "success");
+        if (tabId) tabStore.close(tabId);
+      }
+    } catch (err) {
+      banner.show("Error: " + err.message, "error", 5000);
     }
-    return Object.entries(meta || {});
-  });
+  }
 
-  let redirectHistory = $derived(d.redirect_history || []);
+  function cancelTombstone() {
+    confirmDelete = false;
+  }
 
-  // Filter out non-display fields
-  let infoEntries = $derived(
-    Object.entries(d).filter(([key]) =>
-      !["title", "metadata_json", "redirect_history", "data", "message"].includes(key)
-      && typeof d[key] !== "object",
-    ),
-  );
+  // ── Collapsible sections ──────────────────────────────────────
+  let techOpen = $state(false);
+
+  // ── Keyboard shortcuts ────────────────────────────────────────
+  function handleWindowKeydown(e) {
+    const tag = e.target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || e.target.isContentEditable) return;
+    if (confirmDelete) {
+      if (e.key === "Escape") { cancelTombstone(); e.preventDefault(); }
+      return;
+    }
+    const plain = !e.ctrlKey && !e.metaKey && !e.altKey;
+    if (e.key === "n" && plain) { handleNew(); e.preventDefault(); }
+  }
 </script>
 
+<svelte:window onkeydown={handleWindowKeydown} />
+
 <div class="detail">
-  <!-- Title with language picker -->
-  {#if titleLanguages.length > 0}
-    <div class="title-section">
+  <!-- ════════ Toolbar ════════ -->
+  <div class="toolbar">
+    <button class="btn-small" onclick={handleNew} title="Assign new DOI (n)">+ New</button>
+    {#if d.doi}
+      <button class="btn-small" onclick={copyDoi} title="Copy DOI to clipboard">📋 Copy DOI</button>
+    {/if}
+    {#if d.target_url}
+      <button class="btn-small" onclick={openUrl} title="Open target URL in new tab">🔗 Open URL</button>
+    {/if}
+    {#if d.doi}
+      <button class="btn-small" onclick={openModifyForm} title="Modify this DOI">✏ Modify</button>
+      <button class="btn-small" onclick={confirmMerge} title="Merge this DOI into another">🔀 Merge</button>
+      <button class="btn-small danger" onclick={requestTombstone} title="Tombstone this DOI">🗑 Tombstone</button>
+    {/if}
+  </div>
+
+  <!-- ════════ Title + type badge ════════ -->
+  <div class="title-section">
+    {#if titleLanguages.length > 0}
       <h2 class="detail-title">{displayTitle}</h2>
+    {:else if d.title}
+      <h2 class="detail-title">
+        {typeof d.title === "string" ? d.title : ""}
+      </h2>
+    {/if}
+    {#if d.doi_type}
+      <span class="doi-type-badge">{typeBadgeText}</span>
+    {/if}
+    {#if titleLanguages.length > 0}
       <div class="language-picker">
         <span class="lang-label">Language:</span>
         <select bind:value={selectedLanguage} class="lang-select">
@@ -144,98 +253,150 @@
           {/each}
         </select>
       </div>
-    </div>
-  {:else if d.title}
-    <h2 class="detail-title">{d.title}</h2>
-  {/if}
+    {/if}
+  </div>
 
-  <!-- Key-value info table -->
-  <table class="detail-table">
-    <tbody>
-    {#each infoEntries as [key, value]}
-      <tr>
-        <td class="dt-key">{key.replace(/_/g, " ")}</td>
-        <td class="dt-value">
-          {#if typeof value === "string" && (value.startsWith("http://") || value.startsWith("https://"))}
-            <a href={value} target="_blank" rel="noopener noreferrer" class="url-link">{value}</a>
-          {:else if value === null}
-            <span class="null-value">—</span>
-          {:else}
-            {String(value)}
-          {/if}
-        </td>
-      </tr>
-    {/each}
-    </tbody>
-  </table>
-
-  <!-- Metadata section -->
+  <!-- ════════ Metadata (human-relevant fields first) ════════ -->
   {#if metadataEntries.length > 0}
     <details class="section" open>
       <summary class="section-title">Metadata</summary>
       <table class="detail-table metadata-table">
         <tbody>
-        {#each metadataEntries as [key, value]}
-          <tr>
-            <td class="dt-key">{key}</td>
-            <td class="dt-value">
-              {#if typeof value === "object"}
-                <pre class="json-pre">{JSON.stringify(value, null, 2)}</pre>
-              {:else}
-                {String(value)}
-              {/if}
-            </td>
-          </tr>
-        {/each}
+          {#each metadataEntries as [key, value]}
+            <tr>
+              <td class="dt-key">{key}</td>
+              <td class="dt-value">
+                {#if typeof value === "object"}
+                  <pre class="json-pre">{JSON.stringify(value, null, 2)}</pre>
+                {:else}
+                  {String(value)}
+                {/if}
+              </td>
+            </tr>
+          {/each}
         </tbody>
       </table>
     </details>
   {/if}
 
-  <!-- Redirect history -->
-  {#if redirectHistory.length > 0}
-    <details class="section">
-      <summary class="section-title">Redirect History ({redirectHistory.length})</summary>
-      <table class="detail-table">
-        <thead>
-          <tr><th class="dt-key">Previous URL</th><th class="dt-key">Redirected At</th></tr>
-        </thead>
-        <tbody>
-        {#each redirectHistory as entry}
-          <tr>
-            <td class="dt-value"><a href={entry.previous_url || entry.url} target="_blank" class="url-link">{entry.previous_url || entry.url}</a></td>
-            <td class="dt-value">{entry.redirected_at || entry.timestamp || "—"}</td>
-          </tr>
+  <!-- ════════ Technical Info (collapsible at bottom) ════════ -->
+  <details class="section" bind:open={techOpen}>
+    <summary class="section-title">
+      Technical Info {techFields.length > 0 ? `(${techFields.length})` : ""}
+    </summary>
+    <table class="detail-table">
+      <tbody>
+        {#each techFields as field}
+          {#if field.key === "Target URL" || field.key === "URL"}
+            <tr>
+              <td class="dt-key">{field.key}</td>
+              <td class="dt-value">
+                <a href={field.value} target="_blank" rel="noopener noreferrer" class="url-link">{field.value}</a>
+              </td>
+            </tr>
+          {:else}
+            <tr>
+              <td class="dt-key">{field.key}</td>
+              <td class="dt-value">
+                {field.value === null || field.value === undefined
+                  ? <span class="null-value">—</span>
+                  : String(field.value)}
+              </td>
+            </tr>
+          {/if}
         {/each}
-        </tbody>
-      </table>
-    </details>
-  {/if}
+      </tbody>
+    </table>
 
-  <!-- Action buttons -->
-  {#if d.doi}
-    <div class="actions">
-      <button class="btn btn-primary" onclick={copyDoi}>📋 Copy DOI</button>
-      {#if d.target_url}
-        <button class="btn btn-primary" onclick={openUrl}>🔗 Open URL</button>
-      {/if}
-      <button class="btn btn-edit" onclick={openModifyForm}>✏ Modify</button>
-      <button class="btn btn-merge" onclick={confirmMerge}>🔀 Merge</button>
-      <button class="btn btn-danger" onclick={confirmDelete}>🗑 Tombstone</button>
-    </div>
-  {/if}
+    <!-- ── Redirect History (subsection) ── -->
+    {#if redirectHistory.length > 0}
+      <details class="subsection">
+        <summary class="subsection-title">
+          Redirect History ({redirectHistory.length})
+        </summary>
+        <table class="detail-table">
+          <thead>
+            <tr>
+              <th class="dt-key">Previous URL</th>
+              <th class="dt-key">Redirected At</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each redirectHistory as entry}
+              <tr>
+                <td class="dt-value">
+                  <a href={entry.previous_url || entry.url} target="_blank" class="url-link">
+                    {entry.previous_url || entry.url}
+                  </a>
+                </td>
+                <td class="dt-value">
+                  {entry.redirected_at || entry.timestamp || "—"}
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </details>
+    {/if}
+  </details>
 </div>
+
+{#if confirmDelete}
+  <ConfirmDialog
+    message={`Tombstone "${d.doi}"? This action cannot be undone.`}
+    onConfirm={executeTombstone}
+    onDismiss={cancelTombstone}
+  />
+{/if}
 
 <style>
   .detail {
-    padding: 1rem;
+    padding: 0;
     max-width: 800px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
   }
+
+  /* ── Toolbar ──────────────────────────────── */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0.4rem 0.75rem;
+    border-bottom: 1px solid #2a2a3e;
+    background: #1a1a2e;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .btn-small {
+    padding: 0.2rem 0.5rem;
+    background: #2a2a3e;
+    border: 1px solid #444;
+    border-radius: 3px;
+    color: #e0e0e0;
+    cursor: pointer;
+    font-family: monospace;
+    font-size: 0.78rem;
+    white-space: nowrap;
+  }
+  .btn-small:hover {
+    background: #3a3a4e;
+  }
+  .btn-small.danger {
+    border-color: #a33;
+    color: #f77;
+  }
+  .btn-small.danger:hover {
+    background: #3a1a1a;
+  }
+
+  /* ── Title section ────────────────────────── */
   .title-section {
     display: flex;
     align-items: baseline;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
+    gap: 0.5rem;
+    padding: 0.75rem 0.75rem 0.5rem;
     flex-wrap: wrap;
   }
   .detail-title {
@@ -244,6 +405,17 @@
     font-weight: 600;
     font-family: monospace;
     word-break: break-word;
+    margin: 0;
+  }
+  .doi-type-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    background: #2a2a3e;
+    color: #9292aa;
+    white-space: nowrap;
+    font-family: monospace;
   }
   .language-picker {
     display: flex;
@@ -252,6 +424,7 @@
     font-family: monospace;
     font-size: 0.78rem;
     color: #7c7c9a;
+    margin-left: auto;
   }
   .lang-select {
     background: #2a2a3e;
@@ -262,18 +435,59 @@
     font-family: monospace;
     font-size: 0.78rem;
   }
+
+  /* ── Sections ──────────────────────────────── */
+  .section {
+    margin: 0.25rem 0.75rem;
+    border: 1px solid #2a2a3e;
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+  }
+  .section-title {
+    font-family: monospace;
+    font-size: 0.82rem;
+    color: #7c7c9a;
+    cursor: pointer;
+    padding: 0.25rem 0;
+    user-select: none;
+  }
+  .section-title:hover {
+    color: #b0b0c0;
+  }
+
+  .subsection {
+    margin: 0.5rem 0 0.25rem 0;
+    border: 1px solid #2a2a3e;
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+  }
+  .subsection-title {
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: #7c7c9a;
+    cursor: pointer;
+    padding: 0.2rem 0;
+    user-select: none;
+  }
+  .subsection-title:hover {
+    color: #b0b0c0;
+  }
+
+  /* ── Tables ────────────────────────────────── */
   .detail-table {
     width: 100%;
     border-collapse: collapse;
     font-family: monospace;
     font-size: 0.82rem;
-    margin-bottom: 0.5rem;
   }
   .detail-table tr {
     border-bottom: 1px solid #2a2a3e;
   }
+  .detail-table tr:last-child {
+    border-bottom: none;
+  }
   .detail-table td, .detail-table th {
-    padding: 0.35rem 0.5rem;
+    padding: 0.3rem 0.5rem;
     vertical-align: top;
   }
   .dt-key {
@@ -287,27 +501,26 @@
     color: #e0e0e0;
     word-break: break-all;
   }
+  .detail-table th.dt-key {
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 1px solid #444;
+  }
   .url-link {
     color: #7c9ad4;
     text-decoration: none;
   }
-  .url-link:hover { text-decoration: underline; }
-  .null-value { color: #666; font-style: italic; }
+  .url-link:hover {
+    text-decoration: underline;
+  }
+  .null-value {
+    color: #666;
+    font-style: italic;
+  }
 
-  .section {
-    margin: 0.75rem 0;
-    border: 1px solid #2a2a3e;
-    border-radius: 4px;
-    padding: 0.25rem 0.5rem;
+  .metadata-table {
+    margin-bottom: 0;
   }
-  .section-title {
-    font-family: monospace;
-    font-size: 0.82rem;
-    color: #7c7c9a;
-    cursor: pointer;
-    padding: 0.25rem 0;
-  }
-  .metadata-table { margin-bottom: 0; }
   .json-pre {
     background: #222;
     padding: 0.3rem 0.5rem;
@@ -316,34 +529,6 @@
     color: #c8c8e8;
     overflow-x: auto;
     max-width: 500px;
+    white-space: pre-wrap;
   }
-
-  .actions {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    margin-top: 1rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid #333;
-  }
-  .btn {
-    padding: 0.4rem 0.7rem;
-    border: 1px solid #555;
-    border-radius: 4px;
-    background: #2a2a3e;
-    color: #e0e0e0;
-    font-family: monospace;
-    font-size: 0.78rem;
-    cursor: pointer;
-    transition: background 0.1s;
-  }
-  .btn:hover { background: #3a3a5a; }
-  .btn-primary { background: #2a4a5a; border-color: #3a6a7a; }
-  .btn-primary:hover { background: #3a5a6a; }
-  .btn-edit { background: #2a4a3a; border-color: #3a7a4a; }
-  .btn-edit:hover { background: #3a6a4a; }
-  .btn-merge { background: #3a2a4a; border-color: #5a3a7a; }
-  .btn-merge:hover { background: #4a3a5a; }
-  .btn-danger { background: #4a2a2a; border-color: #7a3a3a; }
-  .btn-danger:hover { background: #6a3a3a; }
 </style>

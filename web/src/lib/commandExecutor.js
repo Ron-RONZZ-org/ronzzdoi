@@ -17,8 +17,8 @@ const COMMAND_ENDPOINT = "/api/v1/command";
 export function deriveIdKey(type, data, tokens, flags) {
   if (type === "detail" && data?.doi) return `detail-${data.doi}`;
   if (type === "detail" && data?.citation) return `detail-citation-${tokens[2] || ""}`;
-  if (type === "list" && tokens[0] === "doi" && tokens[1] === "search")
-    return `list-doi-search-${tokens[2] || ""}-${flags.mode || "semantical"}`;
+  if (type === "doi-list" && tokens[0] === "doi" && tokens[1] === "search")
+    return `doi-list-search-${tokens[2] || ""}-${flags.mode || "semantical"}`;
   if (type === "list" && tokens[0] === "auth") return "list-auth-api-key";
   if (type === "success") return null;
   if (type === "error") return null;

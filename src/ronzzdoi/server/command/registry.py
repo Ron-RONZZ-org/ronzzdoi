@@ -245,6 +245,14 @@ def _build_tree() -> list[dict[str, Any]]:
 _tree_cache: list[dict[str, Any]] | None = None
 
 
+def get_descriptions() -> dict[str, str]:
+    """Return a copy of the descriptions dict (path → description).
+
+    Used by the ``!help`` command to list available commands.
+    """
+    return dict(_descriptions)
+
+
 def get_command_tree() -> list[dict[str, Any]]:
     """Return the cached command tree, rebuilding if stale."""
     global _tree_cache

@@ -100,7 +100,7 @@ ronzzdoi-dev --seed
 uv run ronzzdoi-dev --seed
 ```
 
-This creates an admin API key, a read-only API key, and **8 sample DOIs** (external, book, webpage, film, person, country, circulaire, rulebook), then starts the server on `http://127.0.0.1:8000`. Copy the admin key from the output — it's shown only once.
+This creates an admin API key, a read-only API key, and **8 sample DOIs** (external, book, webpage, film, person, country, circulaire, rulebook), then starts the servers — internal API on `http://127.0.0.1:8011`, public API on `http://127.0.0.1:8012`. Copy the admin key from the output — it's shown only once.
 
 ### Use the CLI
 
@@ -123,7 +123,7 @@ ronzzdoi auth api_key create --name "CI key" --permission edit --owner "CI pipel
 cd web && npm install && npm run dev
 ```
 
-Open `http://127.0.0.1:6005` in your browser, paste your API key, then type `!help`, `!doi search`, etc.
+Open `http://127.0.0.1:6025` in your browser, paste your API key, then type `!help`, `!doi search`, etc.
 
 ## Testing
 
@@ -174,14 +174,7 @@ uv run pytest tests/
 ronzzdoi-dev            # with venv activated, or:
 uv run ronzzdoi-dev     # without activation
 
-# Start dev server with seed data (creates API keys automatically)
-ronzzdoi-dev --seed
-uv run ronzzdoi-dev --seed
-
-# Start in public-only mode
-ronzzdoi-dev --mode public --port 9000
-uv run ronzzdoi-dev --mode public --port 9000
-```
+# --seed starts dev servers with seed data (creates API keys automatically)
 
 ## License
 

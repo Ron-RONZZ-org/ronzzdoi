@@ -201,6 +201,7 @@
 
 <style>
   .chat-input {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;

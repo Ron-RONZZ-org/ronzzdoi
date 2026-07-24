@@ -5,8 +5,8 @@ Defaults to ``--mode internal`` for production safety.
 
 Usage::
 
-    ronzzdoi-server                          # mode=internal, 127.0.0.1:8001
-    ronzzdoi-server --mode public            # mode=public, 0.0.0.0:8002
+    ronzzdoi-server                          # mode=internal, 127.0.0.1:8011
+    ronzzdoi-server --mode public            # mode=public, 0.0.0.0:8012
     ronzzdoi-server --mode internal --port 9000
 """
 
@@ -39,7 +39,7 @@ def server_main() -> None:
         "--port",
         type=int,
         default=None,
-        help="Server port (default: 8001 for internal, 8002 for public)",
+        help="Server port (default: 8011 for internal, 8012 for public)",
     )
     parser.add_argument(
         "--data-dir",
@@ -53,7 +53,7 @@ def server_main() -> None:
     # Resolve defaults per mode
     mode = args.mode
     host = args.host or ("127.0.0.1" if mode == "internal" else "0.0.0.0")
-    port = args.port or (8001 if mode == "internal" else 8002)
+    port = args.port or (8011 if mode == "internal" else 8012)
 
     # Create the app
     try:

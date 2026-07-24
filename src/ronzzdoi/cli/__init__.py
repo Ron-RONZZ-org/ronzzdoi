@@ -7,7 +7,7 @@ subcommands.  Every authenticated request requires an API key, passed via
 Usage::
 
     ronzzdoi --api-key <key> doi assign https://example.com --title "Example"
-    ronzzdoi --server http://localhost:8000 auth api_key list
+    ronzzdoi --server http://localhost:8011 auth api_key list
     ronzzdoi search "quantum computing" --mode semantic
 """
 
@@ -38,8 +38,8 @@ def _build_parser() -> argparse.ArgumentParser:
     # ── Global options ─────────────────────────────────────────────────────
     parser.add_argument(
         "--server",
-        default=os.environ.get("RONZZDOI_SERVER", "http://127.0.0.1:8000"),
-        help="ronzzdoi server URL (default: http://127.0.0.1:8000, "
+        default=os.environ.get("RONZZDOI_SERVER", "http://127.0.0.1:8011"),
+        help="ronzzdoi server URL (default: http://127.0.0.1:8011, "
         "env: RONZZDOI_SERVER)",
     )
     parser.add_argument(

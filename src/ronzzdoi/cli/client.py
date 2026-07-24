@@ -53,7 +53,7 @@ class RonzzdoiClient:
 
     Args:
         server_url: Base URL of the ronzzdoi server (default
-            ``http://127.0.0.1:8000``).
+            ``http://127.0.0.1:8011``).
         api_key: API key for authentication.  Passed via
             ``Authorization: Bearer <key>`` on every request.
         client: Optional pre-configured ``httpx.Client`` for dependency
@@ -62,7 +62,7 @@ class RonzzdoiClient:
 
     def __init__(
         self,
-        server_url: str = "http://127.0.0.1:8000",
+        server_url: str = "http://127.0.0.1:8011",
         api_key: str = "",
         *,
         client: httpx.Client | None = None,

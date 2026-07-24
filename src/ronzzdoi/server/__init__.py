@@ -13,7 +13,7 @@ Usage::
     from ronzzdoi.server import create_app
 
     app = create_app()
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8011)
 """
 
 from __future__ import annotations
