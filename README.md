@@ -75,24 +75,43 @@ ls ../lightercore ../lighterauth   # must exist
 uv pip install -e "../lightercore" -e "../lighterauth" -e ".[dev]"
 ```
 
+### Activate the virtual environment
+
+The install step above puts the `ronzzdoi`, `ronzzdoi-dev`, and `ronzzdoi-server` commands
+into the project's `.venv/bin/` directory. Make them available on your PATH:
+
+```bash
+source .venv/bin/activate
+```
+
+Or run individual commands with `uv run` (no activation needed):
+
+```bash
+uv run ronzzdoi --help
+```
+
 ### Start dev server with seed data
 
 ```bash
+# With venv activated:
 ronzzdoi-dev --seed
+
+# Or without activation:
+uv run ronzzdoi-dev --seed
 ```
 
 This creates an admin API key, a read-only API key, and **8 sample DOIs** (external, book, webpage, film, person, country, circulaire, rulebook), then starts the server on `http://127.0.0.1:8000`. Copy the admin key from the output — it's shown only once.
 
 ### Use the CLI
 
-Open another terminal:
+Open another terminal and ensure the venv is activated (`source .venv/bin/activate`) or use `uv run`:
 
 ```bash
 export RONZZDOI_API_KEY="la_a_abc123..."   # the admin key from above
 
-ronzzdoi help
+ronzzdoi --help               # show top-level usage
 ronzzdoi doi search
-ronzzdoi doi search quantum  # matches seeded "Quantum Computing" webpage
+ronzzdoi doi search quantum   # matches seeded "Quantum Computing" webpage
 ronzzdoi doi assign https://example.com --title "My Example" --type external
 ronzzdoi auth api_key list
 ronzzdoi auth api_key create --name "CI key" --permission edit --owner "CI pipeline"
@@ -128,8 +147,9 @@ cd web && npm run test
 ### E2E browser smoke test (requires both servers running)
 
 ```bash
-# Terminal 1: start backend
+# Terminal 1: start backend (venv active or uv run)
 ronzzdoi-dev
+# or: uv run ronzzdoi-dev
 
 # Terminal 2: start frontend
 cd web && npm run dev
@@ -151,13 +171,16 @@ uv pip install -e ".[dev]"
 uv run pytest tests/
 
 # Start dev server (full mode, both internal + public APIs)
-ronzzdoi-dev
+ronzzdoi-dev            # with venv activated, or:
+uv run ronzzdoi-dev     # without activation
 
 # Start dev server with seed data (creates API keys automatically)
 ronzzdoi-dev --seed
+uv run ronzzdoi-dev --seed
 
 # Start in public-only mode
 ronzzdoi-dev --mode public --port 9000
+uv run ronzzdoi-dev --mode public --port 9000
 ```
 
 ## License
