@@ -46,12 +46,18 @@
   };
 
   // Tab types that manage their own Escape
-  const LIST_TAB_TYPES = new Set(["list"]);
+  const LIST_TAB_TYPES = new Set(["list", "doi-list"]);
 
   function handleKeydown(e) {
     // Escape — context-sensitive
     if (e.key === "Escape") {
-      // Level 1: Blur focused input
+      // Level 1: When command input is focused on the home tab, let ChatInput
+      // handle Escape first (close suggestions, then blur on second press).
+      // Must come before the general blur (Level 2) so that Ctrl+Escape on
+      // the home tab doesn't simultaneously close suggestions AND lose focus.
+      if (tabStore.isHome && inputFocused) return;
+
+      // Level 2: Blur focused input on non-home tabs (form fields, search)
       const tag = e.target?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || e.target?.isContentEditable) {
         if (document.activeElement === e.target) {
@@ -61,15 +67,12 @@
         }
       }
 
-      // Level 2: Dismiss global help overlay
+      // Level 3: Dismiss global help overlay
       if (showGlobalHelp) {
         showGlobalHelp = false;
         e.preventDefault();
         return;
       }
-
-      // Level 3: When command input focused on home tab, let ChatInput handle
-      if (tabStore.isHome && inputFocused) return;
 
       // Level 4: List tabs manage their own Escape
       const type = tabStore.active?.type;

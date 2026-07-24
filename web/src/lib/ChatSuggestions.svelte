@@ -78,15 +78,15 @@
 <style>
   .suggestions-dropdown {
     position: absolute;
-    bottom: 100%;
+    top: calc(100% + 4px);
     left: 0;
     right: 0;
     max-height: 240px;
     overflow-y: auto;
     background: #1e1e32;
     border: 1px solid #444;
-    border-radius: 8px 8px 0 0;
-    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     z-index: 100;
   }
   .positional-tracker {
