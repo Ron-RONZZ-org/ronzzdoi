@@ -430,7 +430,7 @@
         role="option"
         aria-selected={selected ? "true" : "false"}
         tabindex="-1"
-        onclick={() => handleRowClick($event, item)}
+        onclick={(e) => handleRowClick(e, item)}
         onkeydown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();

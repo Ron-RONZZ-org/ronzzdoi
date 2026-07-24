@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:build": "node ../tests/build_smoke.mjs"
   },
   "devDependencies": {
     "@lightercore/ui": "file:../../lightercore/web",

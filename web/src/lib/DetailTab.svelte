@@ -298,9 +298,11 @@
             <tr>
               <td class="dt-key">{field.key}</td>
               <td class="dt-value">
-                {field.value === null || field.value === undefined
-                  ? <span class="null-value">—</span>
-                  : String(field.value)}
+                {#if field.value === null || field.value === undefined}
+                  <span class="null-value">—</span>
+                {:else}
+                  {String(field.value)}
+                {/if}
               </td>
             </tr>
           {/if}
