@@ -16,6 +16,7 @@
 
   import { tabStore } from "@lightercore/ui/tabStore.svelte.js";
   import { banner } from "@lightercore/ui/bannerStore.svelte.js";
+  import { createCopyState } from "@lightercore/ui/listTabSelection.svelte.js";
   import ConfirmDialog from "@lightercore/ui/ConfirmDialog.svelte";
 
   let { data = {}, tabId } = $props();
@@ -79,6 +80,82 @@
 
   // ── Redirect history ──────────────────────────────────────────
   let redirectHistory = $derived(d.redirect_history || []);
+
+  // ── Citation ──────────────────────────────────────────────────
+  let availableStyles = $state(["apa"]);
+  let citationStyle = $state("apa");
+  let citationText = $state("");
+  let citationLoading = $state(false);
+  let citationError = $state("");
+
+  // Entity types (person, abstract_entity, country) are not citable
+  const ENTITY_TYPES = new Set(["person", "abstract_entity", "country"]);
+  let isCitable = $derived(d.doi && !ENTITY_TYPES.has(d.doi_type));
+
+  /** Fetch available styles for this DOI. */
+  async function fetchStyles() {
+    if (!d.doi) return;
+    try {
+      const resp = await fetch(`/api/v1/citation?doi=${encodeURIComponent(d.doi)}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.styles && data.styles.length > 0) {
+          availableStyles = data.styles;
+          if (!availableStyles.includes(citationStyle)) {
+            citationStyle = availableStyles[0];
+          }
+        }
+      }
+    } catch {
+      // Styles endpoint failed — proceed with defaults
+    }
+  }
+
+  /** Fetch formatted citation for the current style. */
+  async function loadCitation() {
+    if (!d.doi || !isCitable) return;
+    citationLoading = true;
+    citationError = "";
+    try {
+      const resp = await fetch(
+        `/api/v1/citation?doi=${encodeURIComponent(d.doi)}&style=${encodeURIComponent(citationStyle)}`,
+      );
+      if (resp.ok) {
+        const data = await resp.json();
+        citationText = data.citation || "";
+      } else {
+        const err = await resp.json().catch(() => ({}));
+        citationError = err.detail || "Failed to load citation";
+        citationText = "";
+      }
+    } catch (err) {
+      citationError = err.message || "Network error";
+      citationText = "";
+    } finally {
+      citationLoading = false;
+    }
+  }
+
+  // Fetch styles and citation when DOI becomes available
+  $effect(() => {
+    if (d.doi && isCitable) {
+      fetchStyles();
+      loadCitation();
+    } else {
+      citationText = "";
+      citationError = "";
+    }
+  });
+
+  // Re-fetch citation when style changes
+  $effect(() => {
+    if (d.doi && isCitable && citationStyle) {
+      loadCitation();
+    }
+  });
+
+  // ── Copy state for tech fields ────────────────────────────────
+  let copyState = createCopyState();
 
   // ── Actions ───────────────────────────────────────────────────
 
@@ -279,6 +356,40 @@
     </details>
   {/if}
 
+  <!-- ════════ Citation ════════ -->
+  {#if isCitable}
+    <details class="section citation-section">
+      <summary class="section-title">Citation</summary>
+      <div class="citation-controls">
+        <select bind:value={citationStyle} class="style-select" disabled={citationLoading}>
+          {#each availableStyles as style}
+            <option value={style}>{style}</option>
+          {/each}
+        </select>
+        {#if citationLoading}
+          <span class="citation-status">Loading…</span>
+        {:else if citationError}
+          <span class="citation-status error">{citationError}</span>
+        {:else if citationText}
+          <button
+            class="btn-icon copy-cite-btn"
+            title="Copy citation"
+            onclick={() => copyState.copyToClipboard(citationText)}
+          >
+            {#if copyState.copiedKey === citationText}
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            {:else}
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="10" y="10" width="11" height="11" rx="1.5" opacity="0.5"/><rect x="5" y="4" width="11" height="11" rx="1.5"/></svg>
+            {/if}
+          </button>
+        {/if}
+      </div>
+      {#if citationText}
+        <pre class="citation-text">{citationText}</pre>
+      {/if}
+    </details>
+  {/if}
+
   <!-- ════════ Technical Info (collapsible at bottom) ════════ -->
   <details class="section" bind:open={techOpen}>
     <summary class="section-title">
@@ -301,7 +412,24 @@
                 {#if field.value === null || field.value === undefined}
                   <span class="null-value">—</span>
                 {:else}
-                  {String(field.value)}
+                  <span
+                    class="copy-field"
+                    title="Click to copy"
+                    role="button"
+                    tabindex="0"
+                    onclick={() => copyState.copyToClipboard(String(field.value))}
+                    onkeydown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        copyState.copyToClipboard(String(field.value));
+                      }
+                    }}
+                  >
+                    {String(field.value)}
+                    {#if copyState.copiedKey === String(field.value)}
+                      <svg class="copy-check" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    {/if}
+                  </span>
                 {/if}
               </td>
             </tr>
@@ -532,5 +660,82 @@
     overflow-x: auto;
     max-width: 500px;
     white-space: pre-wrap;
+  }
+
+  /* ── Citation section ─────────────────────────── */
+  .citation-section {
+    margin: 0.25rem 0.75rem;
+  }
+  .citation-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+  }
+  .style-select {
+    background: #2a2a3e;
+    border: 1px solid #555;
+    color: #e0e0e0;
+    border-radius: 3px;
+    padding: 0.15rem 0.3rem;
+    font-family: monospace;
+    font-size: 0.78rem;
+  }
+  .style-select:disabled {
+    opacity: 0.5;
+  }
+  .citation-status {
+    font-family: monospace;
+    font-size: 0.78rem;
+    color: #7c7c9a;
+  }
+  .citation-status.error {
+    color: #f77;
+  }
+  .citation-text {
+    background: #222;
+    padding: 0.5rem 0.6rem;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.78rem;
+    color: #c8c8e8;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.4;
+    margin: 0.25rem 0 0.5rem;
+  }
+  .copy-cite-btn {
+    background: none;
+    border: none;
+    color: #7c7c9a;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 0.85rem;
+    line-height: 1;
+    margin-left: auto;
+  }
+  .copy-cite-btn:hover {
+    color: #e0e0e0;
+    background: #2a2a3e;
+  }
+
+  /* ── Click-to-copy fields ─────────────────────── */
+  .copy-field {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 3px;
+    border-radius: 3px;
+    transition: background 0.1s;
+  }
+  .copy-field:hover {
+    background: #2a2a3e;
+    outline: 1px solid #444;
+  }
+  .copy-check {
+    color: #4a6fa5;
+    flex-shrink: 0;
   }
 </style>
