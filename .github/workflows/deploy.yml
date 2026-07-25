@@ -16,7 +16,7 @@ jobs:
           script: |
             set -e
             sudo -u ronzz git -C /opt/ronzzdoi pull origin main
-            sudo -u ronzz HOME=/opt/ronzzdoi /usr/local/bin/uv sync --extra public --no-dev
+            sudo -u ronzz HOME=/opt/ronzzdoi sh -c 'cd /opt/ronzzdoi && uv sync --extra public --no-dev'
             sudo systemctl restart ronzzdoi
             sleep 2
             sudo systemctl status ronzzdoi --no-pager | head -5
