@@ -127,14 +127,25 @@ Open `http://127.0.0.1:6025` in your browser, paste your API key, then type `!he
 
 ### Use the CLI against production
 
+The public API is exposed at `https://api.doi.ronzz.org` (behind Cloudflare):
+
 ```bash
-export RONZZDOI_SERVER=https://doi.ronzz.org   # or http://127.0.0.1:8011 for local
+export RONZZDOI_SERVER=https://api.doi.ronzz.org
 export RONZZDOI_API_KEY="la_a_abc123..."        # key from an admin
 
 # Query production data
 ronzzdoi doi search
 ronzzdoi doi resolve 10.ronzz/<suffix>
 ronzzdoi citation show 10.ronzz/<suffix> --style apa
+```
+
+If you have SSH access to the production server, you can also run the CLI
+directly on the server against the local API:
+
+```bash
+ssh ronzz-linux-server-2
+sudo -u ronzz HOME=/opt/ronzzdoi /opt/ronzzdoi/.venv/bin/ronzzdoi \
+  --server http://127.0.0.1:8012 --api-key "la_a_..."
 ```
 
 The CLI reads its server URL from the `RONZZDOI_SERVER` environment variable
