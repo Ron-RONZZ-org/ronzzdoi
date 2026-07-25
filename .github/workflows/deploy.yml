@@ -1,0 +1,24 @@
+name: Deploy ronzzdoi
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to production
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: 158.178.193.231
+          username: ubuntu
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/ronzzdoi
+            git pull origin main
+            /usr/local/bin/uv sync --extra public --no-dev
+            sudo systemctl restart ronzzdoi
+            sleep 2
+            sudo systemctl status ronzzdoi --no-pager | head -5
+            echo "=== Deploy OK ==="
