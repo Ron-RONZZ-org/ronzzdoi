@@ -176,6 +176,60 @@ uv run ronzzdoi-dev     # without activation
 
 # --seed starts dev servers with seed data (creates API keys automatically)
 
+## Deployment
+
+### Production server
+
+| Aspect | Detail |
+|--------|--------|
+| Server | `ronzz-linux-server-2` (`158.178.193.231`, OCI Ubuntu 24.04) |
+| Domain | `https://doi.ronzz.org` (Cloudflare proxied, TLS at edge) |
+| User | `ronzz` (system user, no login) |
+| Path | `/opt/ronzzdoi` |
+| Data | `/opt/ronzzdoi/data/` (SQLite WAL) |
+| Service | `ronzzdoi.service` — FastAPI public mode on `127.0.0.1:8012` |
+| Dependencies | `lightercore`, `lighterauth`, `lightersearch` cloned to `/opt/` |
+
+### Dependencies
+
+On the server, sibling repos are cloned to `/opt/` alongside the main repo:
+
+| Repo | Path |
+|------|------|
+| `ronzzdoi` | `/opt/ronzzdoi/` |
+| `lightercore` | `/opt/lightercore/` |
+| `lighterauth` | `/opt/lighterauth/` |
+| `lightersearch` | `/opt/lightersearch/` |
+
+Python dependencies are managed via **uv** and use local path overrides
+(`[tool.uv.sources]` in `pyproject.toml`), so all four must be present.
+
+### Reverse proxy
+
+nginx on the server proxies `doi.ronzz.org` → `127.0.0.1:4321` (ronzzdoi-public-web),
+which in turn calls the API at `http://127.0.0.1:8012`. Cloudflare handles
+TLS termination at the edge (`proxied: true`). A fallback Let's Encrypt cert
+is kept on port 443 for direct-IP access.
+
+### Auto-deploy (GitHub Actions)
+
+Every push to `main` triggers `.github/workflows/deploy.yml`:
+
+1. SSH into the server as `ubuntu` (passwordless sudo)
+2. `git pull` in `/opt/ronzzdoi`
+3. `uv sync --extra public` (installs Python deps including slowapi)
+4. `systemctl restart ronzzdoi`
+
+The deploy key is stored as GitHub repo secret `DEPLOY_SSH_KEY` (shared with
+ronzzdoi-public-web).
+
+### SSL cert (fallback)
+
+- Issued via acme.sh + Let's Encrypt (DNS-01 challenge via Cloudflare API)
+- Auto-renewed daily via `sudo crontab`
+- If renewal fails, the main Cloudflare-proxied path is unaffected — only
+  direct-IP access over HTTPS breaks. Fix: `acme.sh --renew -d doi.ronzz.org`
+
 ## License
 
 AGPL-3.0 — see [LICENSE](LICENSE).

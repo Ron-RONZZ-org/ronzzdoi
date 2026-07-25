@@ -268,6 +268,46 @@ PYTHONPATH=src /path/to/main/checkout/.venv/bin/python -m pytest tests/...
 
 ---
 
+## Deployment
+
+### Production server
+
+| Aspect | Detail |
+|--------|--------|
+| Server | `ronzz-linux-server-2` (`158.178.193.231`, OCI) |
+| Domain | `https://doi.ronzz.org` (Cloudflare proxied) |
+| OS | Ubuntu 24.04 LTS |
+| Service user | `ronzz` (system user, no shell) |
+| App path | `/opt/ronzzdoi/` |
+| Data path | `/opt/ronzzdoi/data/` (SQLite WAL) |
+| Systemd unit | `ronzzdoi.service` |
+| Dependency paths | `/opt/lightercore/`, `/opt/lighterauth/`, `/opt/lightersearch/` |
+
+### Service
+
+- **API**: FastAPI public mode, `127.0.0.1:8012`
+- **CLI entry point**: `ronzzdoi-server --mode public --host 127.0.0.1 --port 8012`
+- **Start**: `sudo systemctl start ronzzdoi`
+- **Logs**: `sudo journalctl -u ronzzdoi -f`
+- **Health**: `curl http://127.0.0.1:8012/` → `{"status":"ok","service":"ronzzdoi"}`
+
+### Auto-deploy (GitHub Actions)
+
+Push to `main` → `.github/workflows/deploy.yml` → SSH as `ubuntu` → `git pull` →
+`uv sync --extra public` → `systemctl restart ronzzdoi`.
+
+Deploy key stored as GitHub secret `DEPLOY_SSH_KEY` (shared with
+ronzzdoi-public-web).
+
+### nginx + DNS
+
+- nginx proxies `doi.ronzz.org:80` → `127.0.0.1:4321` (ronzzdoi-public-web)
+- Cloudflare `proxied: true` — TLS terminated at Cloudflare edge
+- Fallback Let's Encrypt cert on port 443 for direct-IP access
+- Auto-renewal via acme.sh cron with `CF_Token` in `sudo crontab`
+
+---
+
 ## What to Avoid
 
 - **Do not import from lighterbird or semantika.** lightercore and lighterauth are the shared dependencies.
