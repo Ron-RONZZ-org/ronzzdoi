@@ -125,6 +125,32 @@ cd web && npm install && npm run dev
 
 Open `http://127.0.0.1:6025` in your browser, paste your API key, then type `!help`, `!doi search`, etc.
 
+### Use the CLI against production
+
+```bash
+export RONZZDOI_SERVER=https://doi.ronzz.org   # or http://127.0.0.1:8011 for local
+export RONZZDOI_API_KEY="la_a_abc123..."        # key from an admin
+
+# Query production data
+ronzzdoi doi search
+ronzzdoi doi resolve 10.ronzz/<suffix>
+ronzzdoi citation show 10.ronzz/<suffix> --style apa
+```
+
+The CLI reads its server URL from the `RONZZDOI_SERVER` environment variable
+(default: `http://127.0.0.1:8011`). Pass `--server <url>` to override inline.
+
+### Use the public web
+
+For **read-only** search, browsing, and citation formatting, visit
+**[https://doi.ronzz.org](https://doi.ronzz.org)** — no API key required.
+
+### Obtain a production API key
+
+Production API keys are managed by server administrators via the CLI.
+The first admin key is created during initial server setup. Contact your
+admin to request a key with the appropriate permission level.
+
 ## Testing
 
 ### Backend unit + integration tests
