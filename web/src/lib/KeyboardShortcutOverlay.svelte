@@ -15,6 +15,7 @@
         { key: "h", desc: "Toggle this help overlay" },
         { key: "i", desc: "Focus command input" },
         { key: "q / Esc", desc: "Close current tab" },
+        { key: "Alt+N / Alt+P", desc: "Next / previous tab" },
         { key: "Alt+1–9", desc: "Switch to tab by number" },
       ],
     },
