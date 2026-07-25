@@ -302,7 +302,7 @@ ronzzdoi-public-web).
 ### nginx + DNS
 
 - `doi.ronzz.org:80` → `127.0.0.1:4321` (ronzzdoi-public-web)
-- `api.doi.ronzz.org:80` → `127.0.0.1:8012` (public API, for CLI)
+- `doi-api.ronzz.org` → `127.0.0.1:8012` (public API for CLI, Cloudflare proxied + Full strict)
 - Cloudflare `proxied: true` — TLS terminated at Cloudflare edge
 - Fallback Let's Encrypt cert on port 443 for direct-IP access
 - Auto-renewal via acme.sh cron with `CF_Token` in `sudo crontab`
