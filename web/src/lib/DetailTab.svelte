@@ -19,6 +19,12 @@
   import { createCopyState } from "@lightercore/ui/listTabSelection.svelte.js";
   import ConfirmDialog from "@lightercore/ui/ConfirmDialog.svelte";
 
+  /** Auth headers for API calls (mirrors api.js / FormTab). */
+  function authHeaders() {
+    const apiKey = localStorage.getItem("ronzzdoi_api_key") || "";
+    return apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
+  }
+
   let { data = {}, tabId } = $props();
   let d = $derived(data || {});
 
@@ -96,7 +102,9 @@
   async function fetchStyles() {
     if (!d.doi) return;
     try {
-      const resp = await fetch(`/api/v1/citation?doi=${encodeURIComponent(d.doi)}`);
+      const resp = await fetch(`/api/v1/citation?doi=${encodeURIComponent(d.doi)}`, {
+        headers: authHeaders(),
+      });
       if (resp.ok) {
         const data = await resp.json();
         if (data.styles && data.styles.length > 0) {
@@ -119,6 +127,7 @@
     try {
       const resp = await fetch(
         `/api/v1/citation?doi=${encodeURIComponent(d.doi)}&style=${encodeURIComponent(citationStyle)}`,
+        { headers: authHeaders() },
       );
       if (resp.ok) {
         const data = await resp.json();
