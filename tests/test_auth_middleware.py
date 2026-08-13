@@ -28,7 +28,9 @@ class TestRequireWritePermission:
         )
         assert resp.status_code == 401, resp.text
 
-    def test_valid_admin_key(self, client: TestClient, admin_api_key_admin: str) -> None:
+    def test_valid_admin_key(
+        self, client: TestClient, admin_api_key_admin: str
+    ) -> None:
         """POST with a valid admin API key → 200."""
         resp = client.post(
             "/api/test/write",
@@ -39,7 +41,9 @@ class TestRequireWritePermission:
         assert data["user_id"] == "test-admin"
         assert data["permission"] == "admin"
 
-    def test_readonly_key_rejected(self, client: TestClient, admin_api_key_readonly: str) -> None:
+    def test_readonly_key_rejected(
+        self, client: TestClient, admin_api_key_readonly: str
+    ) -> None:
         """POST with a read-only API key → 403."""
         resp = client.post(
             "/api/test/write",
@@ -68,7 +72,9 @@ class TestRequireAdminPermission:
         resp = client.get("/api/test/admin")
         assert resp.status_code == 401, resp.text
 
-    def test_valid_admin_key(self, client: TestClient, admin_api_key_admin: str) -> None:
+    def test_valid_admin_key(
+        self, client: TestClient, admin_api_key_admin: str
+    ) -> None:
         """GET /api/test/admin with valid admin key → 200."""
         resp = client.get(
             "/api/test/admin",
@@ -79,7 +85,9 @@ class TestRequireAdminPermission:
         assert data["user_id"] == "test-admin"
         assert data["permission"] == "admin"
 
-    def test_readonly_key_rejected(self, client: TestClient, admin_api_key_readonly: str) -> None:
+    def test_readonly_key_rejected(
+        self, client: TestClient, admin_api_key_readonly: str
+    ) -> None:
         """GET /api/test/admin with read-only key → 403."""
         resp = client.get(
             "/api/test/admin",
@@ -88,7 +96,9 @@ class TestRequireAdminPermission:
         assert resp.status_code == 403, resp.text
         assert "Requires at least 'admin'" in resp.text
 
-    def test_edit_key_rejected(self, client: TestClient, admin_api_key_edit: str) -> None:
+    def test_edit_key_rejected(
+        self, client: TestClient, admin_api_key_edit: str
+    ) -> None:
         """GET /api/test/admin with edit key → 403."""
         resp = client.get(
             "/api/test/admin",
@@ -101,7 +111,9 @@ class TestRequireAdminPermission:
 class TestRequirePermission:
     """Tests for the ``require_permission(min_tier)`` dependency factory."""
 
-    def test_admin_passes_admin_key(self, client: TestClient, admin_api_key_admin: str) -> None:
+    def test_admin_passes_admin_key(
+        self, client: TestClient, admin_api_key_admin: str
+    ) -> None:
         """require_permission('admin') passes with admin key."""
         resp = client.post(
             "/api/test/require/admin",
@@ -110,7 +122,9 @@ class TestRequirePermission:
         assert resp.status_code == 200, resp.text
         assert resp.json()["user_id"] == "test-admin"
 
-    def test_admin_rejects_edit_key(self, client: TestClient, admin_api_key_edit: str) -> None:
+    def test_admin_rejects_edit_key(
+        self, client: TestClient, admin_api_key_edit: str
+    ) -> None:
         """require_permission('admin') rejects edit key → 403."""
         resp = client.post(
             "/api/test/require/admin",
@@ -119,7 +133,9 @@ class TestRequirePermission:
         assert resp.status_code == 403, resp.text
         assert "Requires at least 'admin'" in resp.text
 
-    def test_edit_passes_edit_key(self, client: TestClient, admin_api_key_edit: str) -> None:
+    def test_edit_passes_edit_key(
+        self, client: TestClient, admin_api_key_edit: str
+    ) -> None:
         """require_permission('edit') passes with edit key."""
         resp = client.post(
             "/api/test/require/edit",
@@ -128,7 +144,9 @@ class TestRequirePermission:
         assert resp.status_code == 200, resp.text
         assert resp.json()["user_id"] == "test-editor"
 
-    def test_edit_passes_admin_key(self, client: TestClient, admin_api_key_admin: str) -> None:
+    def test_edit_passes_admin_key(
+        self, client: TestClient, admin_api_key_admin: str
+    ) -> None:
         """require_permission('edit') passes with admin key (hierarchy)."""
         resp = client.post(
             "/api/test/require/edit",
@@ -137,7 +155,9 @@ class TestRequirePermission:
         assert resp.status_code == 200, resp.text
         assert resp.json()["user_id"] == "test-admin"
 
-    def test_edit_rejects_readonly_key(self, client: TestClient, admin_api_key_readonly: str) -> None:
+    def test_edit_rejects_readonly_key(
+        self, client: TestClient, admin_api_key_readonly: str
+    ) -> None:
         """require_permission('edit') rejects read_only key → 403."""
         resp = client.post(
             "/api/test/require/edit",
@@ -146,7 +166,9 @@ class TestRequirePermission:
         assert resp.status_code == 403, resp.text
         assert "Requires at least 'edit'" in resp.text
 
-    def test_readonly_passes_readonly_key(self, client: TestClient, admin_api_key_readonly: str) -> None:
+    def test_readonly_passes_readonly_key(
+        self, client: TestClient, admin_api_key_readonly: str
+    ) -> None:
         """require_permission('read_only') passes with read_only key."""
         resp = client.post(
             "/api/test/require/read_only",
@@ -154,7 +176,9 @@ class TestRequirePermission:
         )
         assert resp.status_code == 200, resp.text
 
-    def test_readonly_passes_any_key(self, client: TestClient, admin_api_key_edit: str, admin_api_key_admin: str) -> None:
+    def test_readonly_passes_any_key(
+        self, client: TestClient, admin_api_key_edit: str, admin_api_key_admin: str
+    ) -> None:
         """require_permission('read_only') passes with any key."""
         resp1 = client.post(
             "/api/test/require/read_only",
@@ -187,6 +211,7 @@ class TestInitDepsGuard:
     def test_require_permission_without_init(self, monkeypatch) -> None:
         """Calling ``require_permission("edit")`` without init raises RuntimeError."""
         import asyncio
+
         import ronzzdoi.server.auth_middleware as mw
 
         monkeypatch.setattr(mw, "_auth", None)

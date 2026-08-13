@@ -5,10 +5,7 @@ Tests ``check_permission()`` in isolation (no HTTP layer, no database).
 
 from __future__ import annotations
 
-import pytest
-
 from ronzzdoi.server.command.handlers import check_permission
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────────
 

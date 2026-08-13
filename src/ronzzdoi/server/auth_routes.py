@@ -5,20 +5,19 @@ Provides CRUD operations for API keys, accessible to administrators only.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from starlette.status import HTTP_404_NOT_FOUND, HTTP_503_SERVICE_UNAVAILABLE
-
 from lighterauth.api_key import generate_api_key, lookup_api_keys
 from lighterauth.models import (
     ApiKeyCreate,
     ApiKeyPublic,
     ApiKeyWithSecret,
 )
-from pydantic import BaseModel, Field
 from lightercore.db import LighterDB
+from pydantic import BaseModel, Field
+from starlette.status import HTTP_404_NOT_FOUND, HTTP_503_SERVICE_UNAVAILABLE
 
 from ronzzdoi.auth.config import ALL_PERMISSIONS
 from ronzzdoi.server.auth_middleware import require_permission
@@ -75,7 +74,7 @@ async def create_api_key(
 
     # Create record in DB
     key_id = _generate_id()
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     _auth_db.execute(
         "INSERT INTO api_keys (id, name, key, prefix, permission, owner, expires_at, "
@@ -180,7 +179,9 @@ async def revoke_api_key(
 class ApiKeyUpdate(BaseModel):
     """Request to update an existing API key (all fields optional)."""
 
-    name: str | None = Field(default=None, min_length=1, description="New user-friendly name")
+    name: str | None = Field(
+        default=None, min_length=1, description="New user-friendly name"
+    )
     permission: str | None = Field(
         default=None,
         description=f"New permission. One of: {ALL_PERMISSIONS}",
@@ -250,7 +251,7 @@ async def update_api_key(
             updated_at=_parse_dt(row["updated_at"]),
         )
 
-    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    updates["updated_at"] = datetime.now(UTC).isoformat()
 
     set_clauses = [f"{k} = ?" for k in updates]
     values = [updates[k] for k in updates] + [key_id]
@@ -295,7 +296,7 @@ def _parse_dt(value: str | None) -> datetime | None:
     try:
         dt = datetime.fromisoformat(value)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return dt
     except (ValueError, TypeError):
         return None

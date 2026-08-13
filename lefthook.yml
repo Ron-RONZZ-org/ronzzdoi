@@ -1,21 +1,26 @@
 # Lefthook configuration
 # https://github.com/evilmartians/lefthook
+#
+# NOTE: ruff commands go through scripts/lint.sh, NOT `uv run ruff` —
+# `uv run` cannot resolve sibling dependencies (../lighterauth) inside a
+# git worktree, so the hook would always fail there.  lint.sh resolves the
+# main checkout's .venv and runs its ruff binary directly.
 
 pre-commit:
   parallel: true
   commands:
     ruff-check:
       glob: '**/*.py'
-      run: uv run ruff check --force-exclude {staged_files}
+      run: bash scripts/lint.sh check {staged_files}
       fail_text: |
         ❌ Ruff linting failed!
-        Run 'uv run ruff check {staged_files}' for details.
+        Run 'bash scripts/lint.sh check {staged_files}' for details.
     ruff-format:
       glob: '**/*.py'
-      run: uv run ruff format --check --force-exclude {staged_files}
+      run: bash scripts/lint.sh format {staged_files}
       fail_text: |
         ❌ Ruff formatting check failed!
-        Run 'uv run ruff format {staged_files}' to fix.
+        Run 'bash scripts/lint.sh format {staged_files}' to fix.
     bash-syntax:
       glob: '**/*.sh'
       run: bash -n {staged_files}

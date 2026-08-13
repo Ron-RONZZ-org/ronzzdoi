@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 from fastapi.testclient import TestClient
 
 
@@ -93,7 +92,12 @@ class TestCitationEndpoint:
             "https://example.com/book",
             doi_type="book",
             title="Suffix Test",
-            metadata={"authors": [], "title": "Suffix Test", "publisher": "P", "year": 2024},
+            metadata={
+                "authors": [],
+                "title": "Suffix Test",
+                "publisher": "P",
+                "year": 2024,
+            },
         )
         # Extract just the suffix part
         suffix = book["doi"].replace("10.ronzz/", "")

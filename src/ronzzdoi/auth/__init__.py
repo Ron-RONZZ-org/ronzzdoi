@@ -24,8 +24,8 @@ from lighterauth.middleware import Lighterauth
 from lightercore.db import LighterDB
 
 __all__ = [
-    "setup_auth",
     "init_auth_db",
+    "setup_auth",
 ]
 
 

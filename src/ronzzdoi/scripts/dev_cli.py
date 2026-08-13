@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import argparse
 import multiprocessing
-import signal
 import sys
+from datetime import UTC
 from typing import NoReturn
 
 
@@ -29,8 +29,9 @@ def _run_server(mode: str, host: str, port: int, data_dir: str | None) -> NoRetu
         port: Bind port.
         data_dir: Data directory path or ``None`` for XDG default.
     """
-    from ronzzdoi.server.app import create_app
     import uvicorn
+
+    from ronzzdoi.server.app import create_app
 
     app = create_app(data_dir=data_dir, mode=mode)
     uvicorn.run(app, host=host, port=port)
@@ -42,7 +43,9 @@ def dev_main() -> None:
     Starts both internal (auth-protected) and public (rate-limited) API
     servers as separate child processes.
     """
-    parser = argparse.ArgumentParser(prog="ronzzdoi-dev", description="ronzzdoi development server")
+    parser = argparse.ArgumentParser(
+        prog="ronzzdoi-dev", description="ronzzdoi development server"
+    )
     parser.add_argument(
         "--port-int",
         type=int,
@@ -101,9 +104,11 @@ def dev_main() -> None:
         proc_pub.start()
         processes.append(proc_pub)
 
-        print(f"ronzzdoi dev server started:")
+        print("ronzzdoi dev server started:")
         print(f"  Internal API:  http://{args.host}:{args.port_int}  (auth-protected)")
-        print(f"  Public API:    http://{args.host}:{args.port_pub}  (rate-limited, no auth)")
+        print(
+            f"  Public API:    http://{args.host}:{args.port_pub}  (rate-limited, no auth)"
+        )
         print(f"  API docs:      http://{args.host}:{args.port_int}/api/docs")
         print()
         print("Press Ctrl+C to stop both servers.")
@@ -121,7 +126,9 @@ def dev_main() -> None:
                     sys.exit(1)
 
     except ImportError:
-        print("uvicorn is required. Install with: uv pip install uvicorn", file=sys.stderr)
+        print(
+            "uvicorn is required. Install with: uv pip install uvicorn", file=sys.stderr
+        )
         sys.exit(1)
     except KeyboardInterrupt:
         print("\nShutting down both servers...")
@@ -164,9 +171,9 @@ def _seed_keys(data_dir: str | None) -> None:
         return
 
     import secrets
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     # Create admin API key
     raw_admin, prefix_admin, hashed_admin = generate_api_key()
@@ -204,7 +211,7 @@ def _seed_keys(data_dir: str | None) -> None:
         ),
     )
 
-    print(f"Seed data created:")
+    print("Seed data created:")
     print(f"  Admin API key:      {raw_admin}  (owner: dev-admin)")
     print(f"  Read-only API key:  {raw_ro}  (owner: dev-read-only)")
     print()

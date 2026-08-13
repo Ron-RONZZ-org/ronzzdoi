@@ -9,10 +9,9 @@ from __future__ import annotations
 from typing import Any
 
 from ronzzdoi.doi.exceptions import DOINotFoundError
+from ronzzdoi.server.citation_routes import _get_formatter
 from ronzzdoi.server.command.handlers import check_permission
 from ronzzdoi.server.command.registry import command
-from ronzzdoi.server.citation_routes import _get_formatter
-
 
 # ── citation.show ───────────────────────────────────────────────────────
 

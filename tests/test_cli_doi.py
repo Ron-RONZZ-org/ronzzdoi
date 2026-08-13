@@ -65,12 +65,15 @@ def test_assign_with_url(capsys: pytest.CaptureFixture) -> None:
         assert body["target_url"] == "https://example.com"
         assert body["doi_type"] == "webpage"
         assert body["title"] == "Example"
-        return httpx.Response(201, json={
-            "doi": "10.ronzz/new-uuid",
-            "target_url": "https://example.com",
-            "doi_type": "webpage",
-            "title": "Example",
-        })
+        return httpx.Response(
+            201,
+            json={
+                "doi": "10.ronzz/new-uuid",
+                "target_url": "https://example.com",
+                "doi_type": "webpage",
+                "title": "Example",
+            },
+        )
 
     client = _mock_client(handler)
     args = _make_args(url="https://example.com", doi_type="webpage", title="Example")
@@ -87,12 +90,15 @@ def test_assign_entity_doi(capsys: pytest.CaptureFixture) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         assert "target_url" not in body
-        return httpx.Response(201, json={
-            "doi": "10.ronzz/person-uuid",
-            "target_url": None,
-            "doi_type": "person",
-            "title": "John Doe",
-        })
+        return httpx.Response(
+            201,
+            json={
+                "doi": "10.ronzz/person-uuid",
+                "target_url": None,
+                "doi_type": "person",
+                "title": "John Doe",
+            },
+        )
 
     client = _mock_client(handler)
     args = _make_args(url=None, doi_type="person", title="John Doe")
@@ -105,10 +111,14 @@ def test_assign_json(capsys: pytest.CaptureFixture) -> None:
     """doi assign --json outputs raw JSON."""
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(201, json={"doi": "10.ronzz/uuid", "target_url": "https://ex.com"})
+        return httpx.Response(
+            201, json={"doi": "10.ronzz/uuid", "target_url": "https://ex.com"}
+        )
 
     client = _mock_client(handler)
-    args = _make_args(url="https://ex.com", doi_type="external", title="", json_output=True)
+    args = _make_args(
+        url="https://ex.com", doi_type="external", title="", json_output=True
+    )
     _cmd_assign(args, client)
     captured = capsys.readouterr()
     data = json.loads(captured.out)
@@ -123,16 +133,19 @@ def test_resolve(capsys: pytest.CaptureFixture) -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert "/api/v1/doi/" in str(request.url)
-        return httpx.Response(200, json={
-            "doi": "10.ronzz/abc123",
-            "target_url": "https://example.com",
-            "title": "Example",
-            "doi_type": "webpage",
-            "status": "active",
-            "created_at": "2026-01-01T00:00:00+00:00",
-            "updated_at": "2026-01-01T00:00:00+00:00",
-            "redirect_history": [],
-        })
+        return httpx.Response(
+            200,
+            json={
+                "doi": "10.ronzz/abc123",
+                "target_url": "https://example.com",
+                "title": "Example",
+                "doi_type": "webpage",
+                "status": "active",
+                "created_at": "2026-01-01T00:00:00+00:00",
+                "updated_at": "2026-01-01T00:00:00+00:00",
+                "redirect_history": [],
+            },
+        )
 
     client = _mock_client(handler)
     args = _make_args(doi="10.ronzz/abc123")
@@ -147,18 +160,25 @@ def test_resolve_with_redirect_history(capsys: pytest.CaptureFixture) -> None:
     """doi resolve shows redirect history."""
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={
-            "doi": "10.ronzz/abc",
-            "target_url": "https://new.example.com",
-            "title": "Test",
-            "doi_type": "webpage",
-            "status": "active",
-            "created_at": "2026-01-01T00:00:00+00:00",
-            "updated_at": "2026-06-01T00:00:00+00:00",
-            "redirect_history": [
-                {"old_url": "https://old.example.com", "note": "Moved", "created_at": "2026-03-01T00:00:00+00:00"},
-            ],
-        })
+        return httpx.Response(
+            200,
+            json={
+                "doi": "10.ronzz/abc",
+                "target_url": "https://new.example.com",
+                "title": "Test",
+                "doi_type": "webpage",
+                "status": "active",
+                "created_at": "2026-01-01T00:00:00+00:00",
+                "updated_at": "2026-06-01T00:00:00+00:00",
+                "redirect_history": [
+                    {
+                        "old_url": "https://old.example.com",
+                        "note": "Moved",
+                        "created_at": "2026-03-01T00:00:00+00:00",
+                    },
+                ],
+            },
+        )
 
     client = _mock_client(handler)
     args = _make_args(doi="10.ronzz/abc")
@@ -194,16 +214,24 @@ def test_modify_url(capsys: pytest.CaptureFixture) -> None:
         assert request.method == "PUT"
         body = json.loads(request.content)
         assert body["target_url"] == "https://new.example.com"
-        return httpx.Response(200, json={
-            "doi": "10.ronzz/abc",
-            "target_url": "https://new.example.com",
-            "title": "Test",
-            "doi_type": "webpage",
-        })
+        return httpx.Response(
+            200,
+            json={
+                "doi": "10.ronzz/abc",
+                "target_url": "https://new.example.com",
+                "title": "Test",
+                "doi_type": "webpage",
+            },
+        )
 
     client = _mock_client(handler)
-    args = _make_args(doi="10.ronzz/abc", target_url="https://new.example.com",
-                      title=None, doi_type=None, redirect_note="")
+    args = _make_args(
+        doi="10.ronzz/abc",
+        target_url="https://new.example.com",
+        title=None,
+        doi_type=None,
+        redirect_note="",
+    )
     _cmd_modify(args, client)
     captured = capsys.readouterr()
     assert "https://new.example.com" in captured.out
@@ -217,13 +245,23 @@ def test_modify_all_fields(capsys: pytest.CaptureFixture) -> None:
         assert body["title"] == "New Title"
         assert body["doi_type"] == "book"
         assert body["redirect_note"] == "Moved to new server"
-        return httpx.Response(200, json={
-            "doi": "10.ronzz/abc", "title": "New Title", "doi_type": "book",
-        })
+        return httpx.Response(
+            200,
+            json={
+                "doi": "10.ronzz/abc",
+                "title": "New Title",
+                "doi_type": "book",
+            },
+        )
 
     client = _mock_client(handler)
-    args = _make_args(doi="10.ronzz/abc", target_url=None, title="New Title",
-                      doi_type="book", redirect_note="Moved to new server")
+    args = _make_args(
+        doi="10.ronzz/abc",
+        target_url=None,
+        title="New Title",
+        doi_type="book",
+        redirect_note="Moved to new server",
+    )
     _cmd_modify(args, client)
     captured = capsys.readouterr()
     assert "New Title" in captured.out
@@ -253,13 +291,26 @@ def test_list_dois(capsys: pytest.CaptureFixture) -> None:
     """doi list returns formatted table."""
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={
-            "items": [
-                {"doi": "10.ronzz/aaa", "doi_type": "webpage", "title": "Site A", "deleted_at": None},
-                {"doi": "10.ronzz/bbb", "doi_type": "book", "title": "Book B", "deleted_at": "2026-06-01T00:00:00+00:00"},
-            ],
-            "total": 2,
-        })
+        return httpx.Response(
+            200,
+            json={
+                "items": [
+                    {
+                        "doi": "10.ronzz/aaa",
+                        "doi_type": "webpage",
+                        "title": "Site A",
+                        "deleted_at": None,
+                    },
+                    {
+                        "doi": "10.ronzz/bbb",
+                        "doi_type": "book",
+                        "title": "Book B",
+                        "deleted_at": "2026-06-01T00:00:00+00:00",
+                    },
+                ],
+                "total": 2,
+            },
+        )
 
     client = _mock_client(handler)
     args = _make_args(doi_type="", include_deleted=False)
@@ -296,11 +347,20 @@ def test_merge_force(capsys: pytest.CaptureFixture) -> None:
         assert request.method == "POST"
         body = json.loads(request.content)
         assert body["source_doi"] == "10.ronzz/src"
-        return httpx.Response(200, json={"doi": "10.ronzz/tgt", "target_url": "https://tgt.com", "title": "Target", "doi_type": "webpage"})
+        return httpx.Response(
+            200,
+            json={
+                "doi": "10.ronzz/tgt",
+                "target_url": "https://tgt.com",
+                "title": "Target",
+                "doi_type": "webpage",
+            },
+        )
 
     client = _mock_client(handler)
-    args = _make_args(source_doi="10.ronzz/src", target_doi="10.ronzz/tgt",
-                      preview=False, force=True)
+    args = _make_args(
+        source_doi="10.ronzz/src", target_doi="10.ronzz/tgt", preview=False, force=True
+    )
     _cmd_merge(args, client)
     captured = capsys.readouterr()
     assert "Merge complete" in captured.out
@@ -314,11 +374,16 @@ def test_merge_preview(capsys: pytest.CaptureFixture) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal call_count
         call_count += 1
-        return httpx.Response(200, json={"doi": "10.ronzz/src" if "src" in str(request.url) else "10.ronzz/tgt", "status": "active"})
+        return httpx.Response(
+            200,
+            json={
+                "doi": "10.ronzz/src" if "src" in str(request.url) else "10.ronzz/tgt",
+                "status": "active",
+            },
+        )
 
     client = _mock_client(handler)
-    args = _make_args(source_doi="src", target_doi="tgt",
-                      preview=True, force=False)
+    args = _make_args(source_doi="src", target_doi="tgt", preview=True, force=False)
     _cmd_merge(args, client)
     captured = capsys.readouterr()
     assert "Preview" in captured.out

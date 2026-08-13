@@ -15,15 +15,14 @@ Usage::
 
 from __future__ import annotations
 
+# Import handlers to register them
+from ronzzdoi.server.command import handlers  # noqa: F401
 from ronzzdoi.server.command.registry import (
     command,
     dispatch,
     get_command_tree,
     register_module,
 )
-
-# Import handlers to register them
-from ronzzdoi.server.command import handlers  # noqa: F401
 
 __all__ = [
     "command",
