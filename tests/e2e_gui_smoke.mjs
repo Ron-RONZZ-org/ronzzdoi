@@ -17,6 +17,8 @@ import { strict as assert } from "assert";
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://127.0.0.1:6025";
 const CHROME_PATH = process.env.CHROME_PATH || "chromium";
+// Optional API key (from `ronzzdoi-dev --seed` output). When set, the
+// authenticated flows are exercised (citation, detail view, assign form).
 const API_KEY = process.env.RONZZDOI_API_KEY || "";
 
 // ── Shared state ──────────────────────────────────────────────────────────
@@ -48,7 +50,15 @@ async function typeCommand(cmd) {
     }
   });
   const input = page.locator(".input-field, [aria-label='Message input'], textarea");
-  await input.waitFor({ state: "visible", timeout: 5000 });
+  try {
+    await input.waitFor({ state: "visible", timeout: 1500 });
+  } catch {
+    // Command input only exists on the home tab. Result tabs auto-activate
+    // when opened, so switch back home (Alt+1) before typing.
+    await page.keyboard.press("Alt+1");
+    await sleep(200);
+    await input.waitFor({ state: "visible", timeout: 3000 });
+  }
   await input.click();
   await input.fill("");
   await sleep(30);
@@ -181,6 +191,12 @@ async function runWithBrowser(fn) {
       viewport: { width: 960, height: 720 },
       permissions: ["clipboard-read", "clipboard-write"],
     });
+    // Inject the API key before any page loads (authenticated flows only).
+    if (API_KEY) {
+      await context.addInitScript((key) => {
+        localStorage.setItem("ronzzdoi_api_key", key);
+      }, API_KEY);
+    }
     page = await context.newPage();
 
     page.on("pageerror", (err) => {
@@ -390,6 +406,101 @@ async function runTests() {
       assert(selected === "true", `Tab ${i} should be selected after click`);
     }
   });
+
+  // ═══════════════════════════════════════════
+  // AUTHENTICATED FLOWS (requires RONZZDOI_API_KEY)
+  // ═══════════════════════════════════════════
+  if (API_KEY) {
+    console.log("\n--- AUTHENTICATED FLOWS ---");
+
+    /** Open the detail tab for the seeded "Clean Code" book. */
+    async function openBookDetail() {
+      await typeCommand("!doi search Clean");
+      await pressEnter();
+      await assertTabOpened("DOI");
+      const bookRow = page.locator('[role="option"]', { hasText: "Clean Code" }).first();
+      await bookRow.click();
+      await sleep(800);
+      await page.locator(".metadata-table").waitFor({ state: "visible", timeout: 4000 });
+    }
+
+    await test("Assign form: DOI type autocomplete + plain title input (#36)", async () => {
+      await typeCommand("!doi assign");
+      await pressEnter();
+      await assertTabOpened("Assign");
+
+      const typeInput = page.locator("#doi_type");
+      await typeInput.waitFor({ state: "visible", timeout: 3000 });
+      const listId = await typeInput.getAttribute("list");
+      assert(listId, "DOI type input should reference a datalist for autocomplete");
+      const optionCount = await page.locator(`#${listId} option`).count();
+      assert(optionCount >= 5,
+        `Type datalist should offer many types, found ${optionCount}`);
+
+      const titleTag = await page.locator("#title").evaluate((el) => el.tagName);
+      assert(titleTag === "INPUT",
+        `Title should be a plain text input, got <${titleTag.toLowerCase()}>`);
+
+      // Selecting a type with a schema reveals type-specific fields.
+      await typeInput.fill("book");
+      await sleep(200);
+      const metaFields = await page.locator('.form-field input[type="text"], .form-field textarea').count();
+      assert(metaFields >= 4,
+        `book type should reveal schema fields, found ${metaFields} inputs`);
+    });
+
+    await test("DOI detail: metadata renders as table, no raw JSON (#37)", async () => {
+      await openBookDetail();
+
+      const metaTable = page.locator(".metadata-table");
+      const preCount = await metaTable.locator("pre").count();
+      assert(preCount === 0,
+        `Metadata table must not render raw JSON (<pre>), found ${preCount}`);
+      const tableText = (await metaTable.textContent() || "");
+      assert(/Author|Publisher/i.test(tableText),
+        `Metadata should show humanized fields, got: "${tableText.trim()}"`);
+    });
+
+    await test("Citation section loads without auth error (#35)", async () => {
+      await openBookDetail();
+
+      const citation = page.locator(".citation-section");
+      await citation.waitFor({ state: "visible", timeout: 4000 });
+      const text = (await citation.textContent() || "");
+      assert(!text.includes("Authentication required"),
+        `Citation section must not show auth error, got: "${text.trim()}"`);
+      // A formatted citation (or a graceful "unknown" fallback) should load.
+      const status = citation.locator(".citation-status");
+      if (await status.isVisible().catch(() => false)) {
+        assert(!(await status.textContent()).includes("Authentication"),
+          "Citation status shows an authentication error");
+      }
+    });
+
+    await test("Copy DOI copies a resolvable URL (#38)", async () => {
+      await openBookDetail();
+
+      // The DOI row lives in the collapsed "Technical Info" section.
+      await page.locator('summary', { hasText: "Technical Info" }).click();
+      await sleep(200);
+
+      // The DOI row in Technical Info is now a clickable resolvable link.
+      const doiLink = page.locator('a[title="Open resolvable DOI URL"]');
+      await doiLink.waitFor({ state: "visible", timeout: 4000 });
+      const href = await doiLink.getAttribute("href");
+      assert(href && href.startsWith("http") && href.includes("/10.ronzz/"),
+        `DOI link should be a resolvable URL, got: ${href}`);
+
+      // The toolbar copy button reports the copied URL in the banner.
+      await page.locator('.tab-content.active button[title^="Copy resolvable DOI URL"]').click();
+      await sleep(300);
+      const bannerText = (await page.locator(".banner-text").last().textContent() || "");
+      assert(/http(s)?:\/\/[^ ]+\/10\.ronzz\//.test(bannerText),
+        `Copy DOI banner should show a resolvable URL, got: "${bannerText}"`);
+    });
+  } else {
+    console.log("\n--- AUTHENTICATED FLOWS (skipped — set RONZZDOI_API_KEY) ---");
+  }
 
   // ═══════════════════════════════════════════
   // ERROR CHECK: no JS exceptions

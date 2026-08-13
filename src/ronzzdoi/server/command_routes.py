@@ -10,16 +10,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from starlette.status import HTTP_400_BAD_REQUEST
 
+from ronzzdoi.server.auth_middleware import require_authenticated
 from ronzzdoi.server.command import dispatch, get_command_tree
 from ronzzdoi.server.command.models import CommandRequest, CommandResponse
 from ronzzdoi.server.command.registry import (
     CommandAmbiguousError,
     CommandNotFoundError,
 )
-from ronzzdoi.server.auth_middleware import require_authenticated
+from ronzzdoi.server.doi_routes import _inject_resolve_url
 
 router = APIRouter(prefix="/api/v1", tags=["command"])
 
@@ -46,6 +47,7 @@ def mount_command_routes(app: Any) -> None:
 @router.post("/command", response_model=CommandResponse)
 async def execute_command(
     body: CommandRequest,
+    request: Request,
     user: dict[str, Any] = Depends(require_authenticated),
 ) -> CommandResponse:
     """Execute a ``!command`` and return structured data.
@@ -54,6 +56,10 @@ async def execute_command(
     The frontend sends parsed tokens and flags; the backend dispatches to
     the registered handler and returns a ``{type, title, data}`` response
     that the frontend renders as a tab.
+
+    DOI-bearing results (detail views, list rows) get a ``resolve_url``
+    injected from the request base URL so the GUI can copy/click a
+    browser-resolvable DOI URL.
     """
     try:
         result = dispatch(body.tokens, body.flags, user)
@@ -62,10 +68,14 @@ async def execute_command(
     except CommandAmbiguousError as exc:
         raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail=str(exc))
 
+    data = result.get("data")
+    if data is not None:
+        _inject_resolve_url(data, str(request.base_url))
+
     return CommandResponse(
         type=result.get("type", "detail"),
         title=result.get("title", "Result"),
-        data=result.get("data"),
+        data=data,
     )
 
 

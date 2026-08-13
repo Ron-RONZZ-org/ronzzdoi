@@ -6,6 +6,8 @@ Tests the registry, dispatch, and tree-building logic in isolation
 
 from __future__ import annotations
 
+import importlib
+
 import pytest
 
 from ronzzdoi.server.command.models import CommandRequest
@@ -22,6 +24,12 @@ from ronzzdoi.server.command.registry import (
 
 # ── Helpers ─────────────────────────────────────────────────────────────
 
+# Production handler modules that register commands as a side effect of
+# their module-level ``@command()`` decorators.  Reloaded by
+# ``_clean_registry()`` so the registry is never left empty for later
+# test files in the same pytest session.
+_BUILTIN_HANDLER_MODULES = ("auth", "help", "citation", "doi", "snippet")
+
 
 def _clean_registry() -> None:
     """Clear all registered handlers and the tree cache.
@@ -37,6 +45,21 @@ def _clean_registry() -> None:
     _registry._tree_cache = None
 
 
+def _restore_builtin_handlers() -> None:
+    """Re-register the production commands by re-running their decorators.
+
+    The production handlers only run their module-level ``@command()``
+    decorators once, at import time.  After ``_clean_registry()`` has
+    cleared them, this must be called so later test files that dispatch
+    a real command (e.g. over the HTTP command endpoint) still find
+    those commands registered instead of getting "command not found".
+    """
+    for module_name in _BUILTIN_HANDLER_MODULES:
+        importlib.reload(
+            importlib.import_module(f"ronzzdoi.server.command.handlers.{module_name}")
+        )
+
+
 _MOCK_USER = {"id": "test-user-001", "role": "user", "auth_method": "api_key"}
 
 
@@ -45,23 +68,17 @@ _MOCK_USER = {"id": "test-user-001", "role": "user", "auth_method": "api_key"}
 
 @pytest.fixture(autouse=True)
 def reset_registry() -> None:
-    """Reset the registry before and after each test.
+    """Reset the registry before each test; restore built-ins afterwards.
 
-    Snapshot the handlers registered at import time (the real ``!doi``,
-    ``!snippet``, ``!auth``, … handlers) and restore them afterwards, so
-    this module's isolation never leaves the shared registry empty for
-    later test modules that dispatch real commands.
+    Tests in this file assert against an empty registry, so the setup
+    clears everything.  The teardown re-registers the production
+    handlers so the cleared state never leaks into later test files in
+    the same pytest session.
     """
-    snapshot = (_handlers.copy(), _descriptions.copy())
     _clean_registry()
     yield
-    _handlers.clear()
-    _handlers.update(snapshot[0])
-    _descriptions.clear()
-    _descriptions.update(snapshot[1])
-    import ronzzdoi.server.command.registry as _registry
-
-    _registry._tree_cache = None
+    _clean_registry()
+    _restore_builtin_handlers()
 
 
 # ── Test: @command decorator ────────────────────────────────────────────

@@ -147,6 +147,8 @@ export const doiApi = {
   delete: (doi) =>
     request("DELETE", `/doi/${encodeURIComponent(doi)}`, null, { retry: false }),
 
+  types: () => request("GET", "/doi/types", null, { retry: false }),
+
   search: (params = {}) => {
     const q = new URLSearchParams();
     if (params.query) q.set("query", params.query);
@@ -158,10 +160,12 @@ export const doiApi = {
 };
 
 export const citationApi = {
-  show: (doi, style = "apa") =>
-    request("GET", `/citation/${encodeURIComponent(doi)}?style=${style}`),
+  /** Fetch available styles for a DOI (auth required). */
+  styles: (doi) => request("GET", `/citation?doi=${encodeURIComponent(doi)}`, null, { retry: false }),
 
-  styles: (doi) => request("GET", `/citation/${encodeURIComponent(doi)}/styles`),
+  /** Fetch a formatted citation for a DOI in the given style (auth required). */
+  show: (doi, style = "apa") =>
+    request("GET", `/citation?doi=${encodeURIComponent(doi)}&style=${encodeURIComponent(style)}`, null, { retry: false }),
 };
 
 export const authApi = {

@@ -22,6 +22,17 @@ def _normalize_doi(doi: str) -> str:
     return doi
 
 
+def _display_title(title: Any) -> str:
+    """Render a title for the terminal.
+
+    Multilingual titles are language maps (``{"en": "...", "fr": "..."}``);
+    display the primary language (``en``, falling back to the first entry).
+    """
+    if isinstance(title, dict):
+        return str(title.get("en") or next(iter(title.values()), ""))
+    return str(title) if title is not None else ""
+
+
 def register_subparser(subparsers: argparse._SubParsersAction) -> None:
     """Register the ``doi`` subcommand tree."""
     doi_parser = subparsers.add_parser(
@@ -43,7 +54,12 @@ def register_subparser(subparsers: argparse._SubParsersAction) -> None:
         default=None,
         help="Target URL (omit for entity DOIs: person, abstract_entity, country)",
     )
-    assign_parser.add_argument("--type", dest="doi_type", default="external", help="DOI type (default: external)")
+    assign_parser.add_argument(
+        "--type",
+        dest="doi_type",
+        default="external",
+        help="DOI type (default: external)",
+    )
     assign_parser.add_argument("--title", default="", help="Human-readable title")
     assign_parser.set_defaults(func=_cmd_assign)
 
@@ -66,7 +82,9 @@ def register_subparser(subparsers: argparse._SubParsersAction) -> None:
     modify_parser.add_argument("--url", dest="target_url", help="New target URL")
     modify_parser.add_argument("--title", help="New title")
     modify_parser.add_argument("--type", dest="doi_type", help="New DOI type")
-    modify_parser.add_argument("--redirect-note", default="", help="Note for the redirect entry")
+    modify_parser.add_argument(
+        "--redirect-note", default="", help="Note for the redirect entry"
+    )
     modify_parser.set_defaults(func=_cmd_modify)
 
     # ── doi delete ─────────────────────────────────────────────────────────
@@ -84,8 +102,12 @@ def register_subparser(subparsers: argparse._SubParsersAction) -> None:
         help="List DOIs",
         description="List DOI records with optional type filter. Requires permission: read_only.",
     )
-    list_parser.add_argument("--type", dest="doi_type", default="", help="Filter by DOI type")
-    list_parser.add_argument("--include-deleted", action="store_true", help="Include tombstoned DOIs")
+    list_parser.add_argument(
+        "--type", dest="doi_type", default="", help="Filter by DOI type"
+    )
+    list_parser.add_argument(
+        "--include-deleted", action="store_true", help="Include tombstoned DOIs"
+    )
     list_parser.set_defaults(func=_cmd_list)
 
     # ── doi merge ──────────────────────────────────────────────────────────
@@ -95,9 +117,15 @@ def register_subparser(subparsers: argparse._SubParsersAction) -> None:
         description="Merge a source DOI into a target DOI. Requires permission: edit.",
     )
     merge_parser.add_argument("source_doi", help="Source DOI (will be tombstoned)")
-    merge_parser.add_argument("target_doi", help="Target DOI (receives redirect history)")
-    merge_parser.add_argument("--preview", action="store_true", help="Show affected records without executing")
-    merge_parser.add_argument("--force", action="store_true", help="Skip confirmation prompt")
+    merge_parser.add_argument(
+        "target_doi", help="Target DOI (receives redirect history)"
+    )
+    merge_parser.add_argument(
+        "--preview", action="store_true", help="Show affected records without executing"
+    )
+    merge_parser.add_argument(
+        "--force", action="store_true", help="Skip confirmation prompt"
+    )
     merge_parser.set_defaults(func=_cmd_merge)
 
 
@@ -122,7 +150,7 @@ def _cmd_assign(args: argparse.Namespace, client: RonzzdoiClient) -> None:
     print(f"DOI assigned: {result.get('doi', '?')}")
     print(f"  URL:   {result.get('target_url', '(none)')}")
     print(f"  Type:  {result.get('doi_type', '?')}")
-    print(f"  Title: {result.get('title', '')}")
+    print(f"  Title: {_display_title(result.get('title'))}")
 
 
 def _cmd_resolve(args: argparse.Namespace, client: RonzzdoiClient) -> None:
@@ -136,7 +164,7 @@ def _cmd_resolve(args: argparse.Namespace, client: RonzzdoiClient) -> None:
 
     print(f"DOI:       {result.get('doi', '?')}")
     print(f"URL:       {result.get('target_url', '(none)')}")
-    print(f"Title:     {result.get('title', '')}")
+    print(f"Title:     {_display_title(result.get('title'))}")
     print(f"Type:      {result.get('doi_type', '?')}")
     print(f"Status:    {result.get('status', '?')}")
     print(f"Created:   {result.get('created_at', '?')}")
@@ -179,7 +207,7 @@ def _cmd_modify(args: argparse.Namespace, client: RonzzdoiClient) -> None:
 
     print(f"DOI modified: {result.get('doi', '?')}")
     print(f"  URL:   {result.get('target_url', '(none)')}")
-    print(f"  Title: {result.get('title', '')}")
+    print(f"  Title: {_display_title(result.get('title'))}")
     print(f"  Type:  {result.get('doi_type', '?')}")
 
 
@@ -216,7 +244,7 @@ def _cmd_list(args: argparse.Namespace, client: RonzzdoiClient) -> None:
         print(
             f"{item.get('doi', '?'):<45} "
             f"{item.get('doi_type', '?'):<20} "
-            f"{item.get('title', ''):<40} "
+            f"{_display_title(item.get('title')):<40} "
             f"{status:<10}"
         )
     print(f"\nTotal: {result.get('total', len(items))}")
@@ -244,7 +272,9 @@ def _cmd_merge(args: argparse.Namespace, client: RonzzdoiClient) -> None:
         print("--- Target ---")
         _print_doi_brief(tgt_result)
         print()
-        print("Run without --preview to execute the merge, or add --force to skip confirmation.")
+        print(
+            "Run without --preview to execute the merge, or add --force to skip confirmation."
+        )
         return
 
     if not args.force:
@@ -268,7 +298,9 @@ def _cmd_merge(args: argparse.Namespace, client: RonzzdoiClient) -> None:
             print("Merge cancelled.")
             sys.exit(0)
 
-    result = client.post("/api/v1/doi/merge", json={"source_doi": source, "target_doi": target})
+    result = client.post(
+        "/api/v1/doi/merge", json={"source_doi": source, "target_doi": target}
+    )
 
     if getattr(args, "json_output", False):
         print(json.dumps(result, indent=2))
@@ -276,7 +308,7 @@ def _cmd_merge(args: argparse.Namespace, client: RonzzdoiClient) -> None:
 
     print(f"Merge complete. Target DOI: {result.get('doi', '?')}")
     print(f"  URL:   {result.get('target_url', '(none)')}")
-    print(f"  Title: {result.get('title', '')}")
+    print(f"  Title: {_display_title(result.get('title'))}")
     print(f"  Type:  {result.get('doi_type', '?')}")
 
 
@@ -284,6 +316,6 @@ def _print_doi_brief(record: dict[str, Any]) -> None:
     """Print a brief summary of a DOI record."""
     print(f"  DOI:       {record.get('doi', '?')}")
     print(f"  URL:       {record.get('target_url', '(none)')}")
-    print(f"  Title:     {record.get('title', '')}")
+    print(f"  Title:     {_display_title(record.get('title'))}")
     print(f"  Type:      {record.get('doi_type', '?')}")
     print(f"  Status:    {record.get('status', '?')}")

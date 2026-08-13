@@ -11,7 +11,7 @@ import re
 
 import pytest
 
-from ronzzdoi.doi.constants import DOI_PATTERN, is_valid_doi, is_doi_prefix
+from ronzzdoi.doi.constants import DOI_PATTERN, is_doi_prefix, is_valid_doi
 from ronzzdoi.doi.exceptions import DOIAmbiguousError, DOINotFoundError
 from ronzzdoi.doi.service import DOIService
 
@@ -95,6 +95,29 @@ class TestAssign:
         assert result["metadata"] == {"lang": "en", "pages": 42}
         assert DOI_FORMAT_RE.match(result["doi"])
 
+    def test_assign_multilingual_title(self, svc):
+        """A language-map title is stored as JSON text and read back as a dict."""
+        created = svc.assign(
+            "https://example.org/inception",
+            doi_type="film",
+            title={"en": "Inception", "fr": "Inception"},
+        )
+        # Stored as JSON text in the DB column…
+        row = svc.db.execute_one(
+            "SELECT title FROM dois WHERE doi = ?", (created["doi"],)
+        )
+        assert json.loads(row["title"]) == {"en": "Inception", "fr": "Inception"}
+        # …but returned as a dict through the service API.
+        resolved = svc.resolve(created["doi"])
+        assert resolved["title"] == {"en": "Inception", "fr": "Inception"}
+
+    def test_assign_plain_title_stays_plain(self, svc):
+        """Plain-string titles are stored and returned unchanged."""
+        created = svc.assign("https://example.org", title="Plain Title")
+        assert created["title"] == "Plain Title"
+        resolved = svc.resolve(created["doi"])
+        assert resolved["title"] == "Plain Title"
+
     def test_assign_unique_dois(self, svc):
         """Each assign generates a unique DOI."""
         r1 = svc.assign("https://a.com")
@@ -152,7 +175,9 @@ class TestAssign:
 class TestResolve:
     def test_resolve_by_full_doi(self, svc):
         """Resolve by complete DOI string."""
-        created = svc.assign("https://example.com", title="Test", metadata={"key": "val"})
+        created = svc.assign(
+            "https://example.com", title="Test", metadata={"key": "val"}
+        )
         resolved = svc.resolve(created["doi"])
         assert resolved is not None
         assert resolved["doi"] == created["doi"]
@@ -206,7 +231,7 @@ class TestResolve:
     def test_resolve_exact_match_preferred(self, svc):
         """When exact match exists, it takes priority over prefix match."""
         a = svc.assign("https://a.com")  # doi: 10.ronzz/abc...
-        b = svc.assign("https://b.com")  # doi: 10.ronzz/def...
+        svc.assign("https://b.com")  # doi: 10.ronzz/def...
         # Exact match by full DOI should work
         resolved = svc.resolve(a["doi"])
         assert resolved is not None
@@ -272,6 +297,7 @@ class TestModify:
         """created_at should remain unchanged after modify."""
         created = svc.assign("https://example.com")
         import time
+
         time.sleep(0.01)
         updated = svc.modify(created["doi"], title="Updated")
         assert updated["created_at"] == created["created_at"]
@@ -280,7 +306,11 @@ class TestModify:
     def test_modify_redirect_note(self, svc):
         """Custom redirect note is stored."""
         created = svc.assign("https://original.com")
-        svc.modify(created["doi"], target_url="https://new.com", redirect_note="Server migration")
+        svc.modify(
+            created["doi"],
+            target_url="https://new.com",
+            redirect_note="Server migration",
+        )
         redirects = svc._get_redirect_history(created["doi"])
         assert redirects[0]["note"] == "Server migration"
 

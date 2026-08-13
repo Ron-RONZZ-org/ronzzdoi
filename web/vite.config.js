@@ -12,6 +12,13 @@ export default defineConfig({
         target: `http://localhost:${backendPort}`,
         changeOrigin: true,
       },
+      // DOI redirects are served by the backend at /10.ronzz/<suffix>.
+      // Proxying the path makes copied resolution URLs work from the GUI
+      // origin in dev (issue #38).
+      "/10.ronzz": {
+        target: `http://localhost:${backendPort}`,
+        changeOrigin: false,
+      },
     },
   },
   build: {

@@ -26,12 +26,28 @@ from typing import Any
 from lightercore.crud import CRUDService, now
 from lightercore.db import LighterDB
 
-from ronzzdoi.doi.constants import DOI_PREFIX, UUID4_HEX_LENGTH, is_valid_doi
+from ronzzdoi.doi.constants import DOI_PREFIX, is_valid_doi
 from ronzzdoi.doi.exceptions import (
     DOIAmbiguousError,
     DOIInvalidError,
     DOINotFoundError,
 )
+
+
+def _serialize_title(title: str | dict[str, str]) -> str:
+    """Store a title as text: language maps become JSON strings."""
+    if isinstance(title, dict):
+        return json.dumps(title, ensure_ascii=False)
+    return title
+
+
+def _parse_json_object(value: str) -> dict[str, Any] | None:
+    """Parse *value* as JSON; return the dict only if it parses to a dict."""
+    try:
+        parsed = json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
 
 
 class DOIService(CRUDService):
@@ -93,7 +109,7 @@ class DOIService(CRUDService):
         data.setdefault("created_at", ts)
         data["updated_at"] = ts
 
-        columns = [k for k in data.keys() if not k.startswith("_")]
+        columns = [k for k in data if not k.startswith("_")]
         values = [data[k] for k in columns]
         placeholders = ", ".join(["?"] * len(columns))
 
@@ -151,7 +167,7 @@ class DOIService(CRUDService):
         """
         data: dict[str, Any] = {
             "doi_type": doi_type,
-            "title": title,
+            "title": _serialize_title(title),
             "metadata_json": json.dumps(metadata or {}),
         }
         if target_url is not None:
@@ -257,7 +273,7 @@ class DOIService(CRUDService):
             self._record_redirect(old["doi"], old_url, redirect_note)
 
         if title is not None:
-            update_data["title"] = title
+            update_data["title"] = _serialize_title(title)
         if doi_type is not None:
             update_data["doi_type"] = doi_type
         if metadata is not None:
@@ -267,7 +283,9 @@ class DOIService(CRUDService):
             # Nothing changed — return the existing record with metadata
             # already deserialized by _resolve_exact
             result = dict(old)
-            result.setdefault("status", "tombstone" if old.get("deleted_at") else "active")
+            result.setdefault(
+                "status", "tombstone" if old.get("deleted_at") else "active"
+            )
             result.setdefault("redirect_history", [])
             return result
 
@@ -482,6 +500,15 @@ class DOIService(CRUDService):
 
     @staticmethod
     def _deserialize_record(record: dict[str, Any]) -> None:
-        """Deserialize ``metadata_json`` in-place to a ``metadata`` dict."""
+        """Deserialize JSON fields in-place to native Python objects.
+
+        ``metadata_json`` becomes ``metadata``; a title stored as JSON text
+        (a language map) becomes a dict.
+        """
         raw = record.pop("metadata_json", "{}")
         record["metadata"] = json.loads(raw) if isinstance(raw, str) else raw
+        title = record.get("title")
+        if isinstance(title, str):
+            parsed = _parse_json_object(title)
+            if parsed is not None:
+                record["title"] = parsed
