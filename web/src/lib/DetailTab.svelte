@@ -20,6 +20,7 @@
   import ConfirmDialog from "@lightercore/ui/ConfirmDialog.svelte";
   import { citationApi } from "./api.js";
   import { flattenValue, formatKey } from "./formatValue.js";
+  import { buildEmbedHtml } from "./embed.js";
 
   /** Auth headers for API calls (mirrors api.js / FormTab). */
   function authHeaders() {
@@ -98,9 +99,11 @@
   let citationLoading = $state(false);
   let citationError = $state("");
 
-  // Entity types (person, abstract_entity, country) are not citable
-  const ENTITY_TYPES = new Set(["person", "abstract_entity", "country"]);
-  let isCitable = $derived(d.doi && !ENTITY_TYPES.has(d.doi_type));
+  // Entity types (person, abstract_entity, country) and snippet DOIs
+  // (embeddable content) are not citable — the backend refuses citations
+  // for them (issue #41).
+  const NON_CITABLE_TYPES = new Set(["person", "abstract_entity", "country", "snippet"]);
+  let isCitable = $derived(d.doi && !NON_CITABLE_TYPES.has(d.doi_type));
 
   /** Fetch available styles for this DOI. */
   async function fetchStyles() {
@@ -151,6 +154,16 @@
       loadCitation();
     }
   });
+
+  // ── Snippet embed (issue #43) ──────────────────────────────────────
+  let isSnippet = $derived(d.doi_type === "snippet");
+  let embedHtml = $derived(isSnippet ? buildEmbedHtml(d.doi || "", displayTitle) : "");
+
+  function copyEmbed() {
+    if (!embedHtml) return;
+    copyState.copyToClipboard(embedHtml);
+    banner.show("Embed code copied", "success");
+  }
 
   // ── Copy state for tech fields ────────────────────────────────
   let copyState = createCopyState();
@@ -325,6 +338,9 @@
       <button class="btn-small" onclick={openUrl} title="Open target URL in new tab">🔗 Open URL</button>
     {/if}
     {#if d.doi}
+      {#if isSnippet}
+        <button class="btn-small" onclick={copyEmbed} title="Copy HTML embed code">📋 Copy Embed</button>
+      {/if}
       <button class="btn-small" onclick={openModifyForm} title="Modify this DOI">✏ Modify</button>
       <button class="btn-small" onclick={confirmMerge} title="Merge this DOI into another">🔀 Merge</button>
       <button class="btn-small danger" onclick={requestTombstone} title="Tombstone this DOI">🗑 Tombstone</button>

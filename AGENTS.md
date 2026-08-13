@@ -154,6 +154,7 @@ ronzzdoi/
         │   ├── DetailTab.svelte # Detail view for DOI records
         │   ├── ListTab.svelte   # List view for search results
         │   ├── SnippetTab.svelte# Snippet view with Copy Embed button
+        │   ├── embed.js         # Shared embed base + iframe HTML builder
         │   ├── api.js           # Auth-bearing fetch() wrapper
         │   └── command*.js      # Command engine, parser, executor
         └── App.svelte
@@ -282,7 +283,7 @@ PYTHONPATH=src /path/to/main/checkout/.venv/bin/python -m pytest tests/...
 | Suite | Count | File |
 |-------|-------|------|
 | Backend pytest | 435 | All `tests/test_*.py` |
-| Frontend vitest | 19 | `web/src/lib/__tests__/*.test.js` |
+| Frontend vitest | 57 | `web/src/lib/__tests__/*.test.js` |
 | E2E Playwright | 1 suite | `tests/e2e_gui_smoke.mjs` |
 
 ### E2E GUI smoke test invocation
