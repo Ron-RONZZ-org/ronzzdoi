@@ -204,6 +204,21 @@ For **read-only** search, browsing, and citation formatting, visit
 Snippet embeds live at `https://doi.ronzz.org/embed/10.ronzz/<suffix>` and
 are frameable by any ronzz site.
 
+### Canonical DOI URLs
+
+A DOI resolves at **`https://doi.ronzz.org/<doi>`** (e.g.
+`https://doi.ronzz.org/10.ronzz/<suffix>`): the public web redirects
+external DOIs to their target URL and renders a record page otherwise.
+This canonical base is used everywhere, regardless of the API origin that
+served the record — so "Copy DOI" in the admin GUI (doi-admin.ronzz.org)
+copies `https://doi.ronzz.org/10.ronzz/<suffix>`, never the admin host.
+
+Override the canonical base if needed:
+
+- Backend: `RONZZDOI_RESOLVE_BASE` (default `https://doi.ronzz.org`) —
+  controls `resolve_url` in API responses.
+- GUI dev: `VITE_RONZZDOI_RESOLVE_BASE` (default `https://doi.ronzz.org`).
+
 ### Obtain a production API key
 
 Production API keys are managed by server administrators via the CLI.
@@ -215,7 +230,7 @@ admin to request a key with the appropriate permission level.
 ### Backend unit + integration tests
 
 ```bash
-# Run all tests (435 backend tests)
+# Run all tests (437 backend tests)
 uv run pytest tests/ -v
 
 # Run a specific test file
@@ -226,7 +241,7 @@ uv run pytest tests/test_doi_service.py -v
 
 ```bash
 cd web && npm run test
-# 19 tests across 2 test files (parser, commandExecutor)
+# 53 tests across 5 test files (parser, commandExecutor, formatValue, doiForm, resolveUrl)
 ```
 
 ### E2E browser smoke test (requires both servers running)

@@ -226,6 +226,15 @@ class TestPublicDOIResolve:
         resp = public_client.get("/public/v1/doi/10.ronzz/0000000000000000")
         assert resp.status_code == 404, resp.text
 
+    def test_tombstoned_doi_returns_410(
+        self, public_client: TestClient, doi_crud_svc: Any
+    ) -> None:
+        """A tombstoned DOI is 410 Gone, not a 200 record (issue #40)."""
+        record = doi_crud_svc.assign("https://example.com")
+        doi_crud_svc.delete_doi(record["doi"])
+        resp = public_client.get(f"/public/v1/doi/{record['doi']}")
+        assert resp.status_code == 410, resp.text
+
     def test_invalid_doi_format(self, public_client: TestClient) -> None:
         """Invalid DOI format → 400 (caught by service)."""
         # An empty/invalid path that doesn't match the prefix
@@ -450,6 +459,21 @@ class TestPublicOnlyMode:
     ) -> None:
         """Internal endpoints return 404 in public mode."""
         resp = public_client.get("/api/v1/doi/10.ronzz/test")
+        assert resp.status_code == 404, resp.text
+
+    def test_doi_redirect_without_service_is_404_not_500(
+        self, public_client: TestClient
+    ) -> None:
+        """A redirect registered without a DOI service returns 404, not 500.
+
+        Regression for issue #40: the catch-all redirect route is
+        registered in every mode, but only ``full``/``internal`` mount
+        the DOI service.  Without this guard the handler raised
+        RuntimeError → HTTP 500.
+        """
+        resp = public_client.get(
+            "/10.ronzz/00000000000000000000000000000000", follow_redirects=False
+        )
         assert resp.status_code == 404, resp.text
 
     def test_internal_health_not_found(

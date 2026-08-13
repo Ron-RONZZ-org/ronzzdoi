@@ -528,18 +528,22 @@ async function runTests() {
       await sleep(200);
 
       // The DOI row in Technical Info is now a clickable resolvable link.
+      // It must point at the canonical resolver (doi.ronzz.org), never the
+      // admin API origin (issue #40).
       const doiLink = page.locator('a[title="Open resolvable DOI URL"]');
       await doiLink.waitFor({ state: "visible", timeout: 4000 });
       const href = await doiLink.getAttribute("href");
-      assert(href && href.startsWith("http") && href.includes("/10.ronzz/"),
-        `DOI link should be a resolvable URL, got: ${href}`);
+      assert(href && href.startsWith("https://doi.ronzz.org/10.ronzz/"),
+        `DOI link should point at the canonical resolver, got: ${href}`);
+      assert(!href.includes("doi-admin.ronzz.org"),
+        `DOI link must not point at the admin API origin, got: ${href}`);
 
       // The toolbar copy button reports the copied URL in the banner.
       await page.locator('.tab-content.active button[title^="Copy resolvable DOI URL"]').click();
       await sleep(300);
       const bannerText = (await page.locator(".banner-text").last().textContent() || "");
-      assert(/http(s)?:\/\/[^ ]+\/10\.ronzz\//.test(bannerText),
-        `Copy DOI banner should show a resolvable URL, got: "${bannerText}"`);
+      assert(/https:\/\/doi\.ronzz\.org\/10\.ronzz\//.test(bannerText),
+        `Copy DOI banner should show the canonical resolver URL, got: "${bannerText}"`);
     });
   } else {
     console.log("\n--- AUTHENTICATED FLOWS (skipped — set RONZZDOI_API_KEY) ---");

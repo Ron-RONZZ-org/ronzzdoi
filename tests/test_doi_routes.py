@@ -649,7 +649,7 @@ class TestResolveUrl:
     def test_resolve_includes_resolve_url(
         self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
     ) -> None:
-        """Resolve returns resolve_url built from the request base URL."""
+        """Resolve returns resolve_url built from the canonical base."""
         created = doi_crud_svc.assign("https://example.com")
         resp = doi_client.get(
             f"/api/v1/doi/{created['doi']}",
@@ -657,7 +657,7 @@ class TestResolveUrl:
         )
         assert resp.status_code == 200, resp.text
         data = resp.json()
-        assert data["resolve_url"] == f"http://testserver/{created['doi']}"
+        assert data["resolve_url"] == f"https://doi.ronzz.org/{created['doi']}"
 
     def test_list_items_include_resolve_url(
         self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
@@ -668,7 +668,7 @@ class TestResolveUrl:
             resp = doi_client.get(path, headers=_auth_header(admin_api_key_admin))
             assert resp.status_code == 200, resp.text
             for item in resp.json()["items"]:
-                assert item["resolve_url"].startswith("http://testserver/10.ronzz/")
+                assert item["resolve_url"].startswith("https://doi.ronzz.org/10.ronzz/")
                 assert item["resolve_url"].endswith(item["doi"])
 
     def test_assign_includes_resolve_url(
@@ -682,7 +682,26 @@ class TestResolveUrl:
         )
         assert resp.status_code == 201, resp.text
         data = resp.json()
-        assert data["resolve_url"] == f"http://testserver/{data['doi']}"
+        assert data["resolve_url"] == f"https://doi.ronzz.org/{data['doi']}"
+
+    def test_resolve_url_respects_env_override(
+        self,
+        doi_client: TestClient,
+        doi_crud_svc,
+        admin_api_key_admin: str,
+        monkeypatch,
+    ) -> None:
+        """RONZZDOI_RESOLVE_BASE overrides the canonical resolution base."""
+        monkeypatch.setenv("RONZZDOI_RESOLVE_BASE", "https://doi.example.test")
+        created = doi_crud_svc.assign("https://example.com")
+        resp = doi_client.get(
+            f"/api/v1/doi/{created['doi']}",
+            headers=_auth_header(admin_api_key_admin),
+        )
+        assert resp.status_code == 200, resp.text
+        assert (
+            resp.json()["resolve_url"] == f"https://doi.example.test/{created['doi']}"
+        )
 
 
 # ── Test: GET /api/v1/doi/types ───────────────────────────────────────────
@@ -752,7 +771,7 @@ class TestCommandResolveUrl:
         assert resp.status_code == 200, resp.text
         data = resp.json()["data"]
         assert data["doi"] == created["doi"]
-        assert data["resolve_url"] == f"http://testserver/{created['doi']}"
+        assert data["resolve_url"] == f"https://doi.ronzz.org/{created['doi']}"
 
     def test_doi_search_list_gets_resolve_url(
         self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
@@ -770,7 +789,7 @@ class TestCommandResolveUrl:
         )
         assert resp.status_code == 200, resp.text
         for item in resp.json()["data"]["results"]:
-            assert item["resolve_url"].startswith("http://testserver/10.ronzz/")
+            assert item["resolve_url"].startswith("https://doi.ronzz.org/10.ronzz/")
             assert item["resolve_url"].endswith(item["doi"])
 
     def test_unauthenticated(self, doi_client: TestClient) -> None:

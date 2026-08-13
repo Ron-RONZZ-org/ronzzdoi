@@ -207,6 +207,10 @@ async def public_resolve_doi(doi: str, request: Request) -> dict[str, Any]:
     """Resolve a DOI and return its **public** metadata.
 
     No authentication required.  Returns only public-safe fields.
+
+    Raises:
+        404: If the DOI does not exist.
+        410: If the DOI has been tombstoned.
     """
     svc = _get_doi_svc()
     try:
@@ -217,6 +221,11 @@ async def public_resolve_doi(doi: str, request: Request) -> dict[str, Any]:
     if record is None:
         raise HTTPException(
             status_code=HTTP_404_NOT_FOUND, detail=f"DOI '{doi}' not found."
+        )
+
+    if record.get("deleted_at"):
+        raise HTTPException(
+            status_code=410, detail=f"DOI '{doi}' has been deleted (tombstoned)."
         )
 
     return _record_to_public(record)

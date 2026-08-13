@@ -353,6 +353,23 @@ ronzzdoi-public-web).
   the daily cron, `--install-cert` with `systemctl reload nginx` reloadcmd
 - Fallback Let's Encrypt cert on port 443 for direct-IP access
 
+### DOI resolution flow
+
+- **Canonical URL**: a DOI resolves at `https://doi.ronzz.org/<doi>` — the
+  public web (ronzzdoi-public-web) serves `/10.ronzz/<suffix>`: external DOIs
+  with a `target_url` get an HTTP 302 to the target, everything else renders
+  the record page. Non-existent DOIs → 404, tombstoned → 410.
+- **`resolve_url` in API responses** is always built from the canonical
+  resolution base — never from the request origin — so the admin GUI
+  (doi-admin.ronzz.org) and any other consumer see the same stable URL.
+  Override with `RONZZDOI_RESOLVE_BASE` (default `https://doi.ronzz.org`);
+  the GUI dev server reads `VITE_RONZZDOI_RESOLVE_BASE`.
+- The backend FastAPI also ships a catch-all DOI redirect
+  (`register_doi_redirect`, registered last) for direct deployments; it
+  receives the DOI service explicitly so it works in every mode
+  (full/internal/public) and returns 404 instead of 500 if no service is
+  mounted.
+
 ---
 
 ## What to Avoid

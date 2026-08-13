@@ -18,7 +18,7 @@
   import { banner } from "@lightercore/ui/bannerStore.svelte.js";
   import { createCopyState } from "@lightercore/ui/listTabSelection.svelte.js";
   import ConfirmDialog from "@lightercore/ui/ConfirmDialog.svelte";
-  import { citationApi } from "./api.js";
+  import { citationApi, resolveUrl } from "./api.js";
   import { flattenValue, formatKey } from "./formatValue.js";
   import { buildEmbedHtml } from "./embed.js";
 
@@ -177,9 +177,12 @@
     }, { idKey: "form-doi-assign" });
   }
 
-  /** Browser-resolvable URL for this DOI (issue #38). */
+  /** Browser-resolvable URL for this DOI (issue #38, #40).
+   * Prefer the backend-provided resolve_url (canonical base); fall back
+   * to the canonical resolver so the copied link never points at the
+   * admin API origin (doi-admin.ronzz.org). */
   function doiResolveUrl() {
-    return d.resolve_url || `${window.location.origin}/${d.doi}`;
+    return d.resolve_url || resolveUrl(d.doi);
   }
 
   function copyDoi() {

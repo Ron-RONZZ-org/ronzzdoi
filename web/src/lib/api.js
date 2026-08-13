@@ -131,6 +131,23 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// ── Canonical DOI resolution base ───────────────────────────────────────
+
+const RESOLVE_BASE = (
+  import.meta.env.VITE_RONZZDOI_RESOLVE_BASE || "https://doi.ronzz.org"
+).replace(/\/+$/, "");
+
+/**
+ * Browser-resolvable URL for a DOI (issue #40).
+ *
+ * DOI URLs must be canonical (https://doi.ronzz.org/<doi>) — NOT derived
+ * from the GUI's origin, which in production is the admin API host
+ * (doi-admin.ronzz.org). Override via VITE_RONZZDOI_RESOLVE_BASE.
+ */
+export function resolveUrl(doi) {
+  return `${RESOLVE_BASE}/${doi}`;
+}
+
 // ── Domain-specific API wrappers ───────────────────────────────────────
 
 export const doiApi = {
