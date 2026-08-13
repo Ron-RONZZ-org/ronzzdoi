@@ -12,10 +12,12 @@
   import { doiApi } from "./api.js";
   import { formatKey } from "./formatValue.js";
   import {
+    buildTitle,
     fieldsToMetadata,
     metadataToFormValues,
     parseMetadata,
     titleToFormValue,
+    titleToTranslations,
   } from "./doiForm.js";
 
   import { onMount } from "svelte";
@@ -33,12 +35,17 @@
   let typeOptions = $state([]);
   let typeSchemas = $state({});
 
+  // ── Multilingual title translations (doi forms) ───────────────────────
+  let titleTranslations = $state([]);
+  let titleI18nOpen = $state(false);
+
   // Copy initial data on mount, then fetch the DOI type catalog for the
   // autocomplete dropdown and the type-specific metadata schemas (the
   // backend is the source of truth).  The $state only captures initial
   // values from props once, which is the correct behavior for form fields.
   onMount(async () => {
     fieldValues = { ...initialData };
+    titleTranslations = titleToTranslations(initialData.title);
     try {
       const catalog = await doiApi.types();
       typeOptions = catalog.types || [];
@@ -183,6 +190,13 @@
         }
       }
     }
+    // Multilingual titles: a language map when translations exist.
+    if (isDoiForm && fieldValues.title !== undefined && titleTranslations.length > 0) {
+      const title = buildTitle(fieldValues.title, titleTranslations);
+      if (typeof title === "object") {
+        flags.title = JSON.stringify(title);
+      }
+    }
     // Assemble type-specific metadata from the dynamic fields.
     const selectedType = fieldValues.doi_type || "";
     const schema = typeSchemas[selectedType];
@@ -193,6 +207,22 @@
       }
     }
     return flags;
+  }
+
+  // ── Multilingual title editing ────────────────────────────────────────
+  let isDoiForm = $derived(formType === "doi-assign" || formType === "doi-modify");
+
+  function addTitleTranslation() {
+    titleTranslations = [...titleTranslations, { lang: "", title: "" }];
+  }
+
+  function updateTitleTranslation(index, field, value) {
+    const next = titleTranslations.map((t, i) => (i === index ? { ...t, [field]: value } : t));
+    titleTranslations = next;
+  }
+
+  function removeTitleTranslation(index) {
+    titleTranslations = titleTranslations.filter((_, i) => i !== index);
   }
 
   async function handleSubmit(e) {
@@ -383,6 +413,51 @@
       </div>
     {/each}
 
+    {#if isDoiForm}
+      <div class="form-field">
+        <button
+          type="button"
+          class="i18n-toggle"
+          onclick={() => { titleI18nOpen = !titleI18nOpen; }}
+        >
+          🌐 {titleI18nOpen ? "Hide" : "Add"} translations (multilingual title)
+        </button>
+        {#if titleI18nOpen}
+          <div class="i18n-rows">
+            {#each titleTranslations as t, i (i)}
+              <div class="i18n-row">
+                <input
+                  type="text"
+                  class="field-input i18n-lang"
+                  value={t.lang}
+                  oninput={(e) => updateTitleTranslation(i, "lang", e.target.value)}
+                  placeholder="lang (fr, de, …)"
+                />
+                <input
+                  type="text"
+                  class="field-input i18n-text"
+                  value={t.title}
+                  oninput={(e) => updateTitleTranslation(i, "title", e.target.value)}
+                  placeholder="Translated title"
+                />
+                <button
+                  type="button"
+                  class="i18n-remove"
+                  aria-label="Remove translation"
+                  onclick={() => removeTitleTranslation(i)}
+                >✕</button>
+              </div>
+            {/each}
+            <button type="button" class="btn-small" onclick={addTitleTranslation}>+ Add language</button>
+            <p class="field-help">
+              The primary title is stored as <code>en</code>; translations
+              above add other languages (e.g. <code>fr</code>, <code>de</code>).
+            </p>
+          </div>
+        {/if}
+      </div>
+    {/if}
+
     <div class="form-actions">
       <button type="submit" class="btn-submit" disabled={submitting}>
         {submitting ? "Submitting…" : "Submit"}
@@ -490,6 +565,57 @@
     display: flex;
     gap: 0.5rem;
     padding-top: 0.5rem;
+  }
+  .i18n-toggle {
+    background: none;
+    border: 1px dashed #4a4a6a;
+    color: #7c9ad4;
+    padding: 0.3rem 0.6rem;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.78rem;
+    cursor: pointer;
+    text-align: left;
+  }
+  .i18n-toggle:hover {
+    border-color: #7c9ad4;
+    background: #1e1e3a;
+  }
+  .i18n-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-top: 0.4rem;
+  }
+  .i18n-row {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+  }
+  .i18n-lang {
+    width: 8rem;
+    flex-shrink: 0;
+  }
+  .i18n-text {
+    flex: 1;
+    min-width: 0;
+  }
+  .i18n-remove {
+    background: none;
+    border: none;
+    color: #7c7c9a;
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .i18n-remove:hover {
+    color: #f77;
+    background: #3a1e1e;
+  }
+  .i18n-rows .btn-small {
+    align-self: flex-start;
   }
   .btn-submit {
     padding: 0.5rem 1rem;

@@ -111,10 +111,20 @@ def _record_to_response(
         base_url: Request base URL (e.g. ``str(request.base_url)``).  When
             provided, a browser-resolvable ``resolve_url`` is added.
     """
+    title = record.get("title", "")
+    # Multilingual titles are stored as JSON text — deserialize to a dict
+    # for API consumers (idempotent for plain strings and dicts).
+    if isinstance(title, str):
+        try:
+            parsed = json.loads(title)
+            if isinstance(parsed, dict):
+                title = parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
     result = {
         "doi": record["doi"],
         "target_url": record.get("target_url"),
-        "title": record.get("title", ""),
+        "title": title,
         "doi_type": record.get("doi_type", "external"),
         "metadata": record.get("metadata", json.loads(record.get("metadata_json", "{}"))),
         "created_at": record["created_at"],

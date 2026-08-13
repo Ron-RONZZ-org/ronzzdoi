@@ -1,11 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
+  buildTitle,
   lineToEntry,
   linesToEntries,
   entriesToLines,
   fieldsToMetadata,
   metadataToFormValues,
   titleToFormValue,
+  titleToTranslations,
   parseMetadata,
 } from "../doiForm.js";
 
@@ -118,6 +120,45 @@ describe("titleToFormValue", () => {
 
   it("handles object titles", () => {
     expect(titleToFormValue({ en: "Inception" })).toBe("Inception");
+  });
+});
+
+describe("titleToTranslations", () => {
+  it("extracts non-primary languages from a language map", () => {
+    expect(titleToTranslations({ en: "Inception", fr: "Inception", de: "Inception" })).toEqual([
+      { lang: "fr", title: "Inception" },
+      { lang: "de", title: "Inception" },
+    ]);
+  });
+
+  it("handles JSON-string titles", () => {
+    expect(titleToTranslations('{"en": "Inception", "fr": "Inception"}')).toEqual([
+      { lang: "fr", title: "Inception" },
+    ]);
+  });
+
+  it("returns empty for plain titles", () => {
+    expect(titleToTranslations("Inception")).toEqual([]);
+    expect(titleToTranslations(undefined)).toEqual([]);
+  });
+});
+
+describe("buildTitle", () => {
+  it("returns a plain string when there are no translations", () => {
+    expect(buildTitle("Inception (2010)", [])).toBe("Inception (2010)");
+    expect(buildTitle("  Inception  ", [])).toBe("Inception");
+  });
+
+  it("builds a language map when translations exist", () => {
+    expect(buildTitle("Inception", [
+      { lang: "fr", title: "Inception" },
+      { lang: "de", title: "Inception" },
+    ])).toEqual({ en: "Inception", fr: "Inception", de: "Inception" });
+  });
+
+  it("ignores empty translation rows and allows en-less maps", () => {
+    expect(buildTitle("", [{ lang: "fr", title: "Inception" }])).toEqual({ fr: "Inception" });
+    expect(buildTitle("Inception", [{ lang: " ", title: "" }])).toBe("Inception");
   });
 });
 

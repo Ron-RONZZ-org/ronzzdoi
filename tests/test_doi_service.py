@@ -95,6 +95,29 @@ class TestAssign:
         assert result["metadata"] == {"lang": "en", "pages": 42}
         assert DOI_FORMAT_RE.match(result["doi"])
 
+    def test_assign_multilingual_title(self, svc):
+        """A language-map title is stored as JSON text and read back as a dict."""
+        created = svc.assign(
+            "https://example.org/inception",
+            doi_type="film",
+            title={"en": "Inception", "fr": "Inception"},
+        )
+        # Stored as JSON text in the DB column…
+        row = svc.db.execute_one(
+            "SELECT title FROM dois WHERE doi = ?", (created["doi"],)
+        )
+        assert json.loads(row["title"]) == {"en": "Inception", "fr": "Inception"}
+        # …but returned as a dict through the service API.
+        resolved = svc.resolve(created["doi"])
+        assert resolved["title"] == {"en": "Inception", "fr": "Inception"}
+
+    def test_assign_plain_title_stays_plain(self, svc):
+        """Plain-string titles are stored and returned unchanged."""
+        created = svc.assign("https://example.org", title="Plain Title")
+        assert created["title"] == "Plain Title"
+        resolved = svc.resolve(created["doi"])
+        assert resolved["title"] == "Plain Title"
+
     def test_assign_unique_dois(self, svc):
         """Each assign generates a unique DOI."""
         r1 = svc.assign("https://a.com")

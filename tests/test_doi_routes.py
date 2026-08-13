@@ -189,6 +189,30 @@ class TestAssignEndpoint:
         assert data["title"] == "Test Book"
         assert data["metadata"]["author"] == "Test Author"
 
+    def test_assign_multilingual_title(
+        self, doi_client: TestClient, admin_api_key_admin: str
+    ) -> None:
+        """A language-map title round-trips through the API as a dict."""
+        resp = doi_client.post(
+            "/api/v1/doi",
+            json={
+                "target_url": "https://example.org/inception",
+                "doi_type": "film",
+                "title": {"en": "Inception", "fr": "Inception"},
+            },
+            headers=_auth_header(admin_api_key_admin),
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["title"] == {"en": "Inception", "fr": "Inception"}
+
+        # Resolve returns the same language map.
+        doi = resp.json()["doi"]
+        resolved = doi_client.get(
+            f"/api/v1/doi/{doi}", headers=_auth_header(admin_api_key_admin)
+        )
+        assert resolved.status_code == 200, resolved.text
+        assert resolved.json()["title"] == {"en": "Inception", "fr": "Inception"}
+
     def test_assign_entity_no_url(
         self, doi_client: TestClient, admin_api_key_admin: str
     ) -> None:
@@ -419,6 +443,23 @@ class TestListEndpoint:
         dois = {item["doi"]: item for item in data["items"]}
         assert doomed["doi"] not in dois, "tombstoned DOI should be excluded"
         assert all(not item.get("deleted_at") for item in data["items"])
+
+    def test_list_normalizes_multilingual_title(
+        self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
+    ) -> None:
+        """List responses deserialize JSON-string titles into language maps."""
+        doi_crud_svc.assign(
+            "https://example.org/inception",
+            doi_type="film",
+            title={"en": "Inception", "fr": "Inception"},
+        )
+        resp = doi_client.get(
+            "/api/v1/doi", headers=_auth_header(admin_api_key_admin)
+        )
+        assert resp.status_code == 200, resp.text
+        assert {"en": "Inception", "fr": "Inception"} in [
+            item["title"] for item in resp.json()["items"]
+        ]
 
     def test_list_include_deleted(
         self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str

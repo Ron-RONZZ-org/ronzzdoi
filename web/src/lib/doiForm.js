@@ -146,11 +146,12 @@ export function metadataToFormValues(schema, metadata) {
 /**
  * Parse the stored title into a plain-string prefill value.
  *
- * Titles are plain strings, but legacy records may hold a JSON object
- * of per-language titles (`{"en": "...", "fr": "..."}`).  Returns the
- * object's `en` (or first) value in that case.
+ * Titles are plain strings, but multilingual titles are language maps
+ * (`{"en": "...", "fr": "..."}` — stored as JSON text).  Returns the
+ * primary language (`en`, falling back to the first entry) as the plain
+ * input value.
  *
- * @param {*} title — stored title (string or JSON object).
+ * @param {*} title — stored title (string or language map).
  * @returns {string}
  */
 export function titleToFormValue(title) {
@@ -158,7 +159,7 @@ export function titleToFormValue(title) {
   if (typeof title === "string") {
     try {
       const parsed = JSON.parse(title);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      if (isLanguageMap(parsed)) {
         return parsed.en || Object.values(parsed)[0] || "";
       }
     } catch {
@@ -166,10 +167,65 @@ export function titleToFormValue(title) {
     }
     return title;
   }
-  if (typeof title === "object") {
+  if (isLanguageMap(title)) {
     return title.en || Object.values(title)[0] || "";
   }
   return String(title);
+}
+
+/** True when *value* is a non-null, non-array object (a language map). */
+function isLanguageMap(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Extract the non-primary translations from a multilingual title.
+ *
+ * @param {*} title — stored title (string, JSON string, or language map).
+ * @returns {{ lang: string, title: string }[]}
+ */
+export function titleToTranslations(title) {
+  let map = null;
+  if (typeof title === "string") {
+    try {
+      const parsed = JSON.parse(title);
+      if (isLanguageMap(parsed)) map = parsed;
+    } catch {
+      return [];
+    }
+  } else if (isLanguageMap(title)) {
+    map = title;
+  }
+  if (!map) return [];
+  return Object.entries(map)
+    .filter(([lang, text]) => lang !== "en" && text !== undefined && text !== null)
+    .map(([lang, text]) => ({ lang, title: String(text) }));
+}
+
+/**
+ * Build the title value to submit: a plain string when there are no
+ * translations, or a language map `{en: <primary>, <lang>: ...}` when
+ * translations exist (the primary title is stored under "en").
+ *
+ * @param {string} primary — primary title text.
+ * @param {{ lang: string, title: string }[]} translations
+ * @returns {string|{en: string, [lang]: string}}
+ */
+export function buildTitle(primary, translations = []) {
+  const primaryText = String(primary || "").trim();
+  const extras = (translations || [])
+    .filter((t) => t && String(t.lang || "").trim() && String(t.title || "").trim())
+    .map((t) => ({ lang: t.lang.trim(), title: String(t.title).trim() }));
+
+  if (extras.length === 0) {
+    return primaryText;
+  }
+  const map = {};
+  if (primaryText) map.en = primaryText;
+  for (const { lang, title } of extras) {
+    map[lang] = title;
+  }
+  return map;
 }
 
 /**
