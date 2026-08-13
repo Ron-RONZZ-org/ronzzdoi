@@ -125,11 +125,13 @@ cd web && npm install && npm run dev
 
 Open `http://127.0.0.1:6025` in your browser, paste your API key, then type `!help`, `!doi search`, etc.
 
-The GUI's **Assign DOI** form offers a type dropdown (autocomplete) and
-type-specific metadata fields; the **DOI detail** view renders metadata as
-a readable table (with a "Copy JSON" button) and the **Copy DOI** button
-copies a browser-resolvable URL (`<instance>/10.ronzz/<suffix>`) rather
-than the bare identifier.
+The GUI's **Assign DOI** form offers a type dropdown (autocomplete),
+type-specific metadata fields, and optional multilingual titles (an
+"Add translations" section; the primary title is stored under `en`);
+the **DOI detail** view renders metadata as a readable table (with a
+"Copy JSON" button) and the **Copy DOI** button copies a
+browser-resolvable URL (`<instance>/10.ronzz/<suffix>`) rather than the
+bare identifier.
 
 ### Use the CLI against production
 
