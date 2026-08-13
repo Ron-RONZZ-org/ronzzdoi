@@ -1,0 +1,24 @@
+# Lefthook configuration
+# https://github.com/evilmartians/lefthook
+
+pre-commit:
+  parallel: true
+  commands:
+    ruff-check:
+      glob: '**/*.py'
+      run: uv run ruff check --force-exclude {staged_files}
+      fail_text: |
+        ❌ Ruff linting failed!
+        Run 'uv run ruff check {staged_files}' for details.
+    ruff-format:
+      glob: '**/*.py'
+      run: uv run ruff format --check --force-exclude {staged_files}
+      fail_text: |
+        ❌ Ruff formatting check failed!
+        Run 'uv run ruff format {staged_files}' to fix.
+    bash-syntax:
+      glob: '**/*.sh'
+      run: bash -n {staged_files}
+      fail_text: |
+        ❌ Shell script syntax error detected.
+        Run 'bash -n <file>' to see the error, then fix it.
