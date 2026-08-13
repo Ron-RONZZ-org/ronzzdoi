@@ -8,7 +8,15 @@
 
   import { tabStore } from "@lightercore/ui/tabStore.svelte.js";
   import { banner } from "@lightercore/ui/bannerStore.svelte.js";
-  import { execute, deriveIdKey } from "./commandExecutor.js";
+  import { deriveIdKey } from "./commandExecutor.js";
+  import { doiApi } from "./api.js";
+  import { formatKey } from "./formatValue.js";
+  import {
+    fieldsToMetadata,
+    metadataToFormValues,
+    parseMetadata,
+    titleToFormValue,
+  } from "./doiForm.js";
 
   import { onMount } from "svelte";
 
@@ -19,32 +27,90 @@
   // ── Form state ────────────────────────────────────────────────────────
   let fieldValues = $state({});
   let submitting = $state(false);
-
-  // Copy initial data on mount — the $state only captures initial values
-  // from props once, which is the correct behavior for form fields.
-  onMount(() => {
-    fieldValues = { ...initialData };
-  });
   let formError = $state("");
 
+  // ── DOI type catalog (from GET /api/v1/doi/types) ─────────────────────
+  let typeOptions = $state([]);
+  let typeSchemas = $state({});
+
+  // Copy initial data on mount, then fetch the DOI type catalog for the
+  // autocomplete dropdown and the type-specific metadata schemas (the
+  // backend is the source of truth).  The $state only captures initial
+  // values from props once, which is the correct behavior for form fields.
+  onMount(async () => {
+    fieldValues = { ...initialData };
+    try {
+      const catalog = await doiApi.types();
+      typeOptions = catalog.types || [];
+      typeSchemas = catalog.schemas || {};
+
+      // Prefill dynamic metadata fields (modify form) from the record.
+      const selectedType = fieldValues.doi_type || "";
+      const schema = typeSchemas[selectedType];
+      const existingMetadata = parseMetadata(fieldValues.metadata);
+      if (schema && Object.keys(existingMetadata).length > 0) {
+        fieldValues = {
+          ...fieldValues,
+          ...metadataToFormValues(schema, existingMetadata),
+        };
+      }
+
+      // Legacy multilingual titles ({en: …}) → plain string for the input.
+      const title = titleToFormValue(fieldValues.title);
+      if (title !== fieldValues.title) {
+        fieldValues = { ...fieldValues, title };
+      }
+    } catch {
+      // Type catalog unavailable — form falls back to free-text + JSON.
+    }
+  });
+
   // ── Field definitions per form type ───────────────────────────────────
+
+  /** Dynamic, type-specific metadata fields for the selected doi_type. */
+  function metadataFields() {
+    const selected = fieldValues.doi_type || "";
+    const schema = typeSchemas[selected];
+    if (!schema || schema.length === 0) {
+      return [{
+        name: "metadata",
+        label: "Metadata (JSON)",
+        type: "json",
+        required: false,
+        help: "Type-specific metadata as JSON (advanced). Pick a DOI type above for a guided form.",
+      }];
+    }
+    return schema.map((f) => ({
+      name: `meta_${f.name}`,
+      schemaName: f.name,
+      label: formatKey(f.name),
+      type: f.types.includes("list")
+        ? "meta-list"
+        : f.types.includes("int")
+          ? "meta-int"
+          : "meta-str",
+      required: false,
+      help: f.description || "",
+    }));
+  }
+
   /** @returns {{ name: string, label: string, type: string, required: boolean, help?: string }[]} */
   function getFields() {
     switch (formType) {
       case "doi-assign":
         return [
-          { name: "url", label: "Target URL", type: "url", required: true, help: "The URL this DOI should resolve to" },
-          { name: "title", label: "Title (JSON)", type: "json", required: false, help: '{\"en\": \"...\", \"fr\": \"...\"}' },
-          { name: "doi_type", label: "DOI Type", type: "text", required: false, help: "external, internal, book, webpage, etc." },
-          { name: "metadata", label: "Metadata (JSON)", type: "json", required: false, help: "Type-specific metadata as JSON" },
+          { name: "url", label: "Target URL", type: "url", required: true, help: "The URL this DOI should resolve to (leave empty for entity DOIs)" },
+          { name: "title", label: "Title", type: "text", required: false, help: "Human-readable title" },
+          { name: "doi_type", label: "DOI Type", type: "autocomplete", required: false, help: "Select or type a type (book, film, person, …)", options: typeOptions },
+          ...metadataFields(),
         ];
       case "doi-modify":
         return [
           { name: "doi", label: "DOI", type: "text", required: true, help: "The DOI to modify" },
           { name: "url", label: "New URL", type: "url", required: false, help: "Leave blank to keep current" },
-          { name: "title", label: "Title (JSON)", type: "json", required: false, help: '{\"en\": \"...\"} or leave blank' },
-          { name: "doi_type", label: "DOI Type", type: "text", required: false, help: "Leave blank to keep current" },
-          { name: "metadata", label: "Metadata (JSON)", type: "json", required: false },
+          { name: "title", label: "Title", type: "text", required: false, help: "Leave blank to keep current" },
+          { name: "doi_type", label: "DOI Type", type: "autocomplete", required: false, help: "Leave blank to keep current", options: typeOptions },
+          ...metadataFields(),
         ];
       case "auth-key-create":
         return [
@@ -87,9 +153,21 @@
     }
   }
 
+  /** Extract dynamic metadata field values keyed by schema field name. */
+  function metadataFieldValues() {
+    const out = {};
+    for (const f of fields) {
+      if (f.schemaName && fieldValues[`meta_${f.schemaName}`] !== undefined) {
+        out[f.schemaName] = fieldValues[`meta_${f.schemaName}`];
+      }
+    }
+    return out;
+  }
+
   function buildFlags() {
     const flags = {};
     for (const f of fields) {
+      if (f.schemaName) continue; // dynamic metadata assembled below
       const val = fieldValues[f.name];
       if (val !== undefined && val !== null && val !== "") {
         if (f.type === "json") {
@@ -103,6 +181,15 @@
         } else {
           flags[f.name] = val;
         }
+      }
+    }
+    // Assemble type-specific metadata from the dynamic fields.
+    const selectedType = fieldValues.doi_type || "";
+    const schema = typeSchemas[selectedType];
+    if (schema && schema.length > 0) {
+      const metadata = fieldsToMetadata(schema, metadataFieldValues());
+      if (Object.keys(metadata).length > 0) {
+        flags.metadata = JSON.stringify(metadata);
       }
     }
     return flags;
@@ -183,6 +270,15 @@
   }
 
   function setField(name, value) {
+    if (name === "doi_type") {
+      // Drop stale dynamic metadata fields when the type changes.
+      const cleaned = {};
+      for (const k of Object.keys(fieldValues)) {
+        if (!k.startsWith("meta_")) cleaned[k] = fieldValues[k];
+      }
+      fieldValues = { ...cleaned, [name]: value };
+      return;
+    }
     fieldValues = { ...fieldValues, [name]: value };
   }
 
@@ -232,6 +328,30 @@
               <option value={opt}>{opt}</option>
             {/each}
           </select>
+        {:else if field.type === "autocomplete"}
+          <input
+            id={field.name}
+            type="text"
+            class="field-input"
+            value={fieldValues[field.name] || ""}
+            oninput={(e) => setField(field.name, e.target.value)}
+            placeholder={field.help || ""}
+            list={field.name + "-options"}
+          />
+          <datalist id={field.name + "-options"}>
+            {#each field.options || [] as opt}
+              <option value={opt}></option>
+            {/each}
+          </datalist>
+        {:else if field.type === "meta-list"}
+          <textarea
+            id={field.name}
+            class="field-input field-textarea"
+            value={fieldValues[field.name] || ""}
+            oninput={(e) => setField(field.name, e.target.value)}
+            placeholder="One person per line: DOI (10.ronzz/…) or 'Given Family'"
+            rows="3"
+          ></textarea>
         {:else if field.type === "json"}
           <textarea
             id={field.name}
