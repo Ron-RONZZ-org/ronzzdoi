@@ -9,36 +9,24 @@
    * key `ronzzdoi_embed_base` (default: https://doi.ronzz.org/embed).
    */
 
+  import { buildEmbedHtml, embedUrlFor } from "./embed.js";
+
   let { data = {} } = $props();
 
-  const doi = data.doi || "";
-  const title = data.title || "";
-  const contentKind = data.content_kind || "text";
-  const content = data.content || "";
-  const language = data.language || "";
-  const sourceDoi = data.source_doi || null;
-  const pageStart = data.page_start || "";
-  const pageEnd = data.page_end || "";
-  const status = data.status || "active";
+  const doi = $derived(data.doi || "");
+  const title = $derived(data.title || "");
+  const contentKind = $derived(data.content_kind || "text");
+  const content = $derived(data.content || "");
+  const language = $derived(data.language || "");
+  const sourceDoi = $derived(data.source_doi || null);
+  const pageStart = $derived(data.page_start || "");
+  const pageEnd = $derived(data.page_end || "");
+  const status = $derived(data.status || "active");
 
-  const embedBase = $derived(
-    (typeof localStorage !== "undefined" && localStorage.getItem("ronzzdoi_embed_base")) ||
-      "https://doi.ronzz.org/embed",
-  );
-  const embedUrl = $derived(`${embedBase}/${doi}`);
-  const iframeHtml = $derived(
-    `<iframe src="${embedUrl}" title="${escapeAttr(title || doi)}" width="640" height="240" loading="lazy" style="border:0;border-radius:8px" referrerpolicy="no-referrer" allowfullscreen></iframe>`,
-  );
+  const embedUrl = $derived(embedUrlFor(doi));
+  const iframeHtml = $derived(buildEmbedHtml(doi, title));
 
   let copied = $state(false);
-
-  function escapeAttr(s) {
-    return String(s)
-      .replace(/&/g, "&amp;")
-      .replace(/"/g, "&quot;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-  }
 
   async function copyEmbed() {
     try {
@@ -54,7 +42,7 @@
 
 <div class="snippet-tab">
   <div class="snippet-header">
-    <span class="kind-badge" class:kind={contentKind}>{contentKind}</span>
+    <span class="kind-badge kind-{contentKind}">{contentKind}</span>
     {#if title}
       <span class="snippet-title">{title}</span>
     {/if}

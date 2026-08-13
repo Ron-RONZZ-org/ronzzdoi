@@ -477,6 +477,49 @@ async function runTests() {
       }
     });
 
+    await test("Snippet DOI detail view: no citation, Copy Embed button (#41, #43)", async () => {
+      // Create a fresh snippet, then open its DOI in the detail view.
+      await typeCommand("!snippet assign");
+      await pressEnter();
+      await assertTabOpened("Assign");
+      await page.locator("#content").fill("Cogito ergo sum.");
+      await page.locator("#title").fill("Descartes quote");
+      await page.locator('button[type="submit"]').click();
+      await sleep(900);
+      await assertTabOpened("Snippet");
+
+      // Extract the DOI from the embed URL shown on the snippet tab.
+      const embedUrlText = (await page.locator(".embed-url").textContent() || "").trim();
+      const doiMatch = embedUrlText.match(/([a-f0-9]{32})/);
+      assert(doiMatch, `Snippet tab should reveal its DOI, got: "${embedUrlText}"`);
+      const doi = `10.ronzz/${doiMatch[1]}`;
+
+      // Open the snippet DOI in the DOI detail view.
+      await typeCommand(`!doi resolve ${doi}`);
+      await pressEnter();
+      await assertTabOpened("DOI");
+      await page.locator(".toolbar").waitFor({ state: "visible", timeout: 4000 });
+      await sleep(300);
+
+      // Issue #41 — citation section must NOT render for snippet DOIs.
+      const citationCount = await page.locator(".citation-section").count().catch(() => 0);
+      assert(citationCount === 0,
+        `Citation section must not render for snippet DOIs, found ${citationCount}`);
+
+      // Issue #43 — toolbar exposes a Copy Embed button for snippet DOIs.
+      const embedBtn = page.locator('.tab-content.active button[title="Copy HTML embed code"]');
+      await embedBtn.waitFor({ state: "visible", timeout: 3000 });
+      assert((await embedBtn.textContent() || "").includes("Copy Embed"),
+        "Toolbar should show a Copy Embed button for snippet DOIs");
+
+      // Copying reports the embed code in the banner.
+      await embedBtn.click();
+      await sleep(300);
+      const bannerText = (await page.locator(".banner-text").last().textContent() || "");
+      assert(bannerText.includes("Embed code copied"),
+        `Copy Embed should confirm in the banner, got: "${bannerText}"`);
+    });
+
     await test("Copy DOI copies a resolvable URL (#38)", async () => {
       await openBookDetail();
 
