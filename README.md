@@ -12,6 +12,7 @@ Part of the [lighter ecosystem](https://github.com/Ron-RONZZ-org).
 - **DOI format** — identifiers follow the pattern `10.ronzz/<suffix>` (opaque by default; country DOIs use `10.ronzz/country/<ISO>` as documented exception)
 - **Resolution & redirect** — HTTP redirect from `doi.ronzz.org/10.ronzz/<id>` to target URL with soft redirect support
 - **Citation formatting** — read DOI metadata (`doi_type` + `metadata_json`) and produce styled citations in APA, Vancouver, or JSON format
+- **Embeddable snippets** — host text quotations, code snippets, and KaTeX math as DOIs (separate `snippets` table); unified search finds them alongside DOIs; public content endpoint feeds HTML embeds on other ronzz sites (rendering in `ronzzdoi-public-web`)
 - **17 doc_types** — book, bookSection, scientificPaper, conferencePaper, presentation, report, dataset, webpage, magazineArticle, newspaperArticle, film, podcast, song, media, circulaire, rulebook, document
 - **Person/entity resolution** — authors reference person DOIs; formatters resolve names at format time with per-call caching
 - **FTS5 full-text search** — search across DOI metadata via SQLite FTS5
@@ -113,6 +114,11 @@ ronzzdoi --help               # show top-level usage
 ronzzdoi doi search
 ronzzdoi doi search quantum   # matches seeded "Quantum Computing" webpage
 ronzzdoi doi assign https://example.com --title "My Example" --type external
+ronzzdoi snippet assign --type text --content "To be, or not to be…" \
+    --source-doi 10.ronzz/<book> --page-start "Act 3"   # embeddable snippet
+ronzzdoi snippet assign --type code --content "print('hi')" --language python
+ronzzdoi snippet resolve 10.ronzz/<snippet>
+ronzzdoi snippet embed 10.ronzz/<snippet>   # prints a copy-paste <iframe> tag
 ronzzdoi auth api_key list
 ronzzdoi auth api_key create --name "CI key" --permission edit --owner "CI pipeline"
 ```
@@ -168,7 +174,7 @@ admin to request a key with the appropriate permission level.
 ### Backend unit + integration tests
 
 ```bash
-# Run all tests (352+ backend tests)
+# Run all tests (413 backend tests)
 uv run pytest tests/ -v
 
 # Run a specific test file

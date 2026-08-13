@@ -38,6 +38,7 @@ class PublicDOIResponse(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: str
     snippet: str | None = None
+    content_kind: str | None = None
 
 
 class PublicSearchResponse(BaseModel):
@@ -63,6 +64,24 @@ class PublicCitationResponse(BaseModel):
     citation: str
 
 
+class PublicSnippetResponse(BaseModel):
+    """Public-safe snippet content response.
+
+    Exposes the snippet content + attribution for embed rendering —
+    no internal status, redirect history, or deletion timestamps.
+    """
+
+    doi: str
+    title: str = ""
+    content_kind: str = "text"
+    content: str = ""
+    language: str = ""
+    source_doi: str | None = None
+    page_start: str = ""
+    page_end: str = ""
+    created_at: str
+
+
 class PublicHealthResponse(BaseModel):
     """Public health check response."""
 
@@ -71,8 +90,9 @@ class PublicHealthResponse(BaseModel):
 
 
 __all__ = [
-    "PublicDOIResponse",
-    "PublicSearchResponse",
     "PublicCitationResponse",
+    "PublicDOIResponse",
     "PublicHealthResponse",
+    "PublicSearchResponse",
+    "PublicSnippetResponse",
 ]

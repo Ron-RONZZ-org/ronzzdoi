@@ -28,7 +28,7 @@
   let formError = $state("");
 
   // ── Field definitions per form type ───────────────────────────────────
-  /** @returns {{ name: string, label: string, type: string, required: boolean, help?: string }[]} */
+  /** @returns {{ name: string, label: string, type: string, required: boolean, help?: string, options?: string[] }[]} */
   function getFields() {
     switch (formType) {
       case "doi-assign":
@@ -46,6 +46,25 @@
           { name: "doi_type", label: "DOI Type", type: "text", required: false, help: "Leave blank to keep current" },
           { name: "metadata", label: "Metadata (JSON)", type: "json", required: false },
         ];
+      case "snippet-assign": {
+        // Text/Code/Math toggle switches which fields are shown.
+        const kind = fieldValues.type || "text";
+        const fields = [
+          { name: "type", label: "Content Type", type: "segmented", required: true, options: ["text", "code", "math"], help: "Text quotation, code snippet, or KaTeX math" },
+          { name: "content", label: "Content", type: "textarea", required: true, help: kind === "code" ? "Paste the code snippet" : kind === "math" ? "KaTeX math source (e.g. \\frac{a}{b})" : "The quotation text" },
+          { name: "title", label: "Title", type: "text", required: false, help: "Short human-readable title (optional)" },
+        ];
+        if (kind === "code") {
+          fields.push({ name: "language", label: "Language", type: "text", required: false, help: "python, javascript, bash, …" });
+        } else if (kind === "text") {
+          fields.push(
+            { name: "source_doi", label: "Source DOI", type: "text", required: false, help: "The book/document DOI this quote is from (optional)" },
+            { name: "page_start", label: "Page Start", type: "text", required: false },
+            { name: "page_end", label: "Page End", type: "text", required: false },
+          );
+        }
+        return fields;
+      }
       case "auth-key-create":
         return [
           { name: "name", label: "Key Name", type: "text", required: true },
@@ -76,6 +95,8 @@
         return ["doi", "assign"];
       case "doi-modify":
         return ["doi", "modify"];
+      case "snippet-assign":
+        return ["snippet", "assign"];
       case "auth-key-create":
         return ["auth", "api_key", "create"];
       case "auth-key-update":
@@ -189,6 +210,7 @@
   let displayTitle = $derived(
     formType === "doi-assign" ? "Assign DOI"
       : formType === "doi-modify" ? "Modify DOI"
+      : formType === "snippet-assign" ? "Assign Snippet"
       : formType === "auth-key-create" ? "Create API Key"
       : formType === "auth-key-update" ? "Update API Key"
       : formType === "auth-key-delete" ? "Delete API Key"
@@ -232,6 +254,21 @@
               <option value={opt}>{opt}</option>
             {/each}
           </select>
+        {:else if field.type === "segmented"}
+          <div class="segmented" role="radiogroup" aria-label={field.label}>
+            {#each field.options || [] as opt}
+              <button
+                type="button"
+                class="segmented-option"
+                class:active={fieldValues[field.name] === opt}
+                role="radio"
+                aria-checked={fieldValues[field.name] === opt}
+                onclick={() => setField(field.name, opt)}
+              >
+                {opt}
+              </button>
+            {/each}
+          </div>
         {:else if field.type === "json"}
           <textarea
             id={field.name}
@@ -240,6 +277,17 @@
             oninput={(e) => setField(field.name, e.target.value)}
             placeholder={field.help || ""}
             rows="4"
+          ></textarea>
+        {:else if field.type === "textarea"}
+          <textarea
+            id={field.name}
+            class="field-input field-textarea"
+            class:code-input={fieldValues.type === "code"}
+            value={fieldValues[field.name] || ""}
+            oninput={(e) => setField(field.name, e.target.value)}
+            placeholder={field.help || ""}
+            rows="6"
+            spellcheck={false}
           ></textarea>
         {:else if field.type === "url"}
           <input
@@ -365,6 +413,37 @@
   }
   select.field-input {
     cursor: pointer;
+  }
+  .segmented {
+    display: flex;
+    gap: 0.25rem;
+  }
+  .segmented-option {
+    flex: 1;
+    padding: 0.4rem 0.6rem;
+    background: #16213e;
+    border: 1px solid #555;
+    color: #c0c0d0;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.82rem;
+    cursor: pointer;
+    text-transform: capitalize;
+    transition: all 0.15s;
+  }
+  .segmented-option:hover {
+    border-color: #5a5a8a;
+  }
+  .segmented-option.active {
+    background: #2a4a3a;
+    border-color: #3a7a4a;
+    color: #8fdb9f;
+    font-weight: 600;
+  }
+  .field-textarea.code-input {
+    background: #101526;
+    font-family: monospace;
+    tab-size: 4;
   }
   .form-actions {
     display: flex;

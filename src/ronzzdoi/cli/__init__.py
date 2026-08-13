@@ -62,11 +62,13 @@ def _build_parser() -> argparse.ArgumentParser:
     from ronzzdoi.cli.citation import register_subparser as register_citation
     from ronzzdoi.cli.doi import register_subparser as register_doi
     from ronzzdoi.cli.search import register_subparser as register_search
+    from ronzzdoi.cli.snippet import register_subparser as register_snippet
 
     register_auth(subparsers)
     register_doi(subparsers)
     register_citation(subparsers)
     register_search(subparsers)
+    register_snippet(subparsers)
 
     return parser
 
@@ -101,14 +103,11 @@ def main() -> None:
     try:
         args.func(args, client)
     except AuthenticationError:
-        _print_error(
-            "Authentication failed. Check your API key."
-        )
+        _print_error("Authentication failed. Check your API key.")
         sys.exit(1)
     except AccessDeniedError as exc:
         _print_error(
-            f"Permission denied. Your API key requires higher permission. "
-            f"({exc})"
+            f"Permission denied. Your API key requires higher permission. ({exc})"
         )
         sys.exit(1)
     except ConnectionError_ as exc:

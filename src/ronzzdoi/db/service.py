@@ -124,7 +124,13 @@ class DOIService(CRUDService):
     def _search_fts(
         self, query: str, limit: int = 20, include_snippet: bool = False
     ) -> list[dict[str, Any]]:
-        """Internal FTS5 search implementation.
+        """Internal FTS5 search implementation — unified across dois + snippets.
+
+        Runs the same MATCH query against ``dois_fts`` (DOI titles +
+        metadata) and ``snippets_fts`` (snippet content + language), then
+        merges the two result sets, de-duplicating by DOI.  Snippet hits
+        carry an extra ``content_kind`` key so the frontend can render
+        them distinctly.
 
         Args:
             query: FTS5 query string.
@@ -137,12 +143,13 @@ class DOIService(CRUDService):
         """
         if not query.strip():
             return []
+
         snippet_col = (
             ", snippet(dois_fts, 1, '<mark>', '</mark>', '…', 64) AS snippet"
             if include_snippet
             else ""
         )
-        sql = f"""
+        doi_sql = f"""
             SELECT d.*{snippet_col}
             FROM dois d
             JOIN dois_fts f ON d.rowid = f.rowid
@@ -150,7 +157,35 @@ class DOIService(CRUDService):
             ORDER BY rank
             LIMIT ?
         """
-        return self.db.execute(sql, (query, limit))
+        results = self.db.execute(doi_sql, (query, limit))
+
+        snip_snippet_col = (
+            ", snippet(snippets_fts, 1, '<mark>', '</mark>', '…', 64) AS snippet"
+            if include_snippet
+            else ""
+        )
+        snip_sql = f"""
+            SELECT d.*, s.content_kind AS content_kind{snip_snippet_col}
+            FROM snippets s
+            JOIN dois d ON d.doi = s.doi
+            JOIN snippets_fts f ON s.rowid = f.rowid
+            WHERE snippets_fts MATCH ?
+            ORDER BY rank
+            LIMIT ?
+        """
+        results.extend(self.db.execute(snip_sql, (query, limit)))
+
+        # De-duplicate by DOI, preserving relevance order, cap at limit
+        seen: set[str] = set()
+        merged: list[dict[str, Any]] = []
+        for row in results:
+            if row["doi"] in seen:
+                continue
+            seen.add(row["doi"])
+            merged.append(row)
+            if len(merged) >= limit:
+                break
+        return merged
 
     def search(
         self,
@@ -173,12 +208,14 @@ class DOIService(CRUDService):
             try:
                 return self._search_semantic(query, limit)
             except Exception:
-                pass
+                import logging
+
+                logging.getLogger("ronzzdoi.db").warning(
+                    "Semantic search failed, falling back to FTS5", exc_info=True
+                )
         return self.search_fts(query, limit)
 
-    def _search_semantic(
-        self, query: str, limit: int = 20
-    ) -> list[dict[str, Any]]:
+    def _search_semantic(self, query: str, limit: int = 20) -> list[dict[str, Any]]:
         """Semantic search via lightersearch.
 
         Returns:
@@ -229,10 +266,13 @@ class DOIService(CRUDService):
             return
 
         text = " ".join(
-            filter(None, [
-                doi_entry.get("title", ""),
-                doi_entry.get("metadata_json", "{}"),
-            ])
+            filter(
+                None,
+                [
+                    doi_entry.get("title", ""),
+                    doi_entry.get("metadata_json", "{}"),
+                ],
+            )
         )
         if not text.strip():
             return

@@ -78,9 +78,64 @@ CREATE INDEX IF NOT EXISTS idx_dois_deleted_at     ON dois(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_dois_created_at     ON dois(created_at);
 """
 
+V2 = """
+-- ═══════════════════════════════════════════════════════════════════
+-- Version 2 — embeddable snippets (quotations, code, KaTeX math)
+-- ═══════════════════════════════════════════════════════════════════
+
+-- Snippet content lives in its own table, separate from citation
+-- metadata.  Each snippet is a DOI (dois.doi_type='snippet',
+-- target_url=NULL) with a parallel row here carrying the content.
+CREATE TABLE IF NOT EXISTS snippets (
+    doi          TEXT PRIMARY KEY REFERENCES dois(doi) ON DELETE CASCADE,
+    content_kind TEXT NOT NULL CHECK (content_kind IN ('text','code','math')),
+    content      TEXT NOT NULL,
+    language     TEXT DEFAULT '',
+    source_doi   TEXT REFERENCES dois(doi),
+    page_start   TEXT DEFAULT '',
+    page_end     TEXT DEFAULT '',
+    created_at   TEXT NOT NULL,
+    updated_at   TEXT NOT NULL,
+    deleted_at   TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_snippets_source_doi ON snippets(source_doi);
+CREATE INDEX IF NOT EXISTS idx_snippets_deleted_at ON snippets(deleted_at);
+
+-- FTS5 virtual table (external content on snippets) — unified search:
+-- snippet content is findable through the same search box as DOIs.
+CREATE VIRTUAL TABLE IF NOT EXISTS snippets_fts USING fts5(
+    doi, content, language,
+    content='snippets',
+    content_rowid='rowid'
+);
+
+-- FTS5 sync triggers — keep snippets_fts in sync with snippets
+CREATE TRIGGER IF NOT EXISTS snippets_fts_insert
+AFTER INSERT ON snippets BEGIN
+    INSERT INTO snippets_fts(rowid, doi, content, language)
+    VALUES (new.rowid, new.doi, new.content, new.language);
+END;
+
+CREATE TRIGGER IF NOT EXISTS snippets_fts_delete
+AFTER DELETE ON snippets BEGIN
+    INSERT INTO snippets_fts(snippets_fts, rowid, doi, content, language)
+    VALUES ('delete', old.rowid, old.doi, old.content, old.language);
+END;
+
+CREATE TRIGGER IF NOT EXISTS snippets_fts_update
+AFTER UPDATE ON snippets BEGIN
+    INSERT INTO snippets_fts(snippets_fts, rowid, doi, content, language)
+    VALUES ('delete', old.rowid, old.doi, old.content, old.language);
+    INSERT INTO snippets_fts(rowid, doi, content, language)
+    VALUES (new.rowid, new.doi, new.content, new.language);
+END;
+"""
+
 
 MIGRATIONS: list[tuple[int, str]] = [
     (1, V1),
+    (2, V2),
 ]
 """Ordered list of ``(version, SQL)`` tuples for :meth:`LighterDB.migrate`.
 

@@ -23,6 +23,7 @@ Context resolution order (highest priority first):
 - **Persistent identifier assignment** — ronzzDOIs for external resources (books, films, webpages, conference transcripts, presentations) and internal documents (circulaire, rulebook, generic documents, media files)
 - **Resolution & redirect** — HTTP redirects from `doi.ronzz.org/<id>` to the target resource, with soft redirect on metadata changes
 - **Citation formatting** — format DOI metadata into styled citations (APA, Vancouver, JSON). No separate citation storage — the DOI record is the source of truth
+- **Embeddable snippets** — text quotations, code snippets, and KaTeX math hosted as DOIs with a separate `snippets` table, unified FTS5 search, and a public content endpoint for HTML embeds (v0.1.0+)
 - **FTS5 full-text search** — search across DOI metadata via SQLite FTS5 (v0.1.0)
 - **Public read-only API** — rate-limited public endpoints for DOI metadata, search, and citations (v0.1.0)
 - **Key-only authentication** — no passwords, no user accounts. API keys with 3-tier permission model (read_only / edit / admin)
@@ -116,9 +117,10 @@ ronzzdoi/
 ├── src/
 │   └── ronzzdoi/                # Main Python package
 │       ├── __init__.py
-│       ├── cli/                 # CLI commands (doi, citation, search, auth)
-│       ├── doi/                 # DOI core: assign, resolve, modify, tombstone, list, merge
-│       ├── citation/            # Citation formatting (APA, Vancouver, JSON)
+│   ├── cli/                 # CLI commands (doi, citation, search, auth, snippet)
+│   ├── doi/                 # DOI core: assign, resolve, modify, tombstone, list, merge
+│   ├── snippet/             # Embeddable snippets: quotations, code, KaTeX math
+│   ├── citation/            # Citation formatting (APA, Vancouver, JSON)
 │       ├── db/                  # SQLite models, migrations, FTS5 service
 │       ├── server/              # FastAPI API server (internal + public routes)
 │       │   ├── command/         # !xxx command dispatch + handlers
@@ -262,7 +264,7 @@ PYTHONPATH=src /path/to/main/checkout/.venv/bin/python -m pytest tests/...
 
 | Suite | Count | File |
 |-------|-------|------|
-| Backend pytest | 352 | All `tests/test_*.py` |
+| Backend pytest | 422 | All `tests/test_*.py` |
 | Frontend vitest | 19 | `web/src/lib/__tests__/*.test.js` |
 | E2E Playwright | 1 suite | `tests/e2e_gui_smoke.mjs` |
 
@@ -324,6 +326,7 @@ ronzzdoi-public-web).
 | Module | AGENTS File | Status |
 |--------|-------------|--------|
 | DOI | `docs/AGENTS-doi.md` | ✅ Implemented |
+| Snippet | `docs/AGENTS-snippet.md` | ✅ Implemented |
 | Citation | `docs/AGENTS-citation.md` | ✅ Implemented |
 | DB | `docs/AGENTS-db.md` | ✅ Implemented |
 | Server | (inline in AGENTS.md) | ✅ Implemented |
@@ -338,6 +341,7 @@ ronzzdoi-public-web).
 Root AGENTS.md (global rules)
     │
     ├── docs/AGENTS-doi.md
+    ├── docs/AGENTS-snippet.md
     ├── docs/AGENTS-citation.md
     └── docs/AGENTS-db.md
 ```

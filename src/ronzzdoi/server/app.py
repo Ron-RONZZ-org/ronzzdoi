@@ -30,7 +30,6 @@ from typing import Literal
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
 from lightercore.paths import set_app_name
 
 from ronzzdoi.auth import setup_auth
@@ -43,8 +42,10 @@ from ronzzdoi.server.auth_routes import mount_auth_routes
 from ronzzdoi.server.citation_routes import mount_citation_routes
 from ronzzdoi.server.command_routes import mount_command_routes
 from ronzzdoi.server.doi_routes import mount_doi_routes, register_doi_redirect
-from ronzzdoi.server.search_routes import mount_search_routes
 from ronzzdoi.server.public_routes import mount_public_routes
+from ronzzdoi.server.search_routes import mount_search_routes
+from ronzzdoi.server.snippet_routes import mount_snippet_routes
+from ronzzdoi.snippet.service import SnippetService
 
 _DEFAULT_PORT = 8011
 """Default port for the API server."""
@@ -91,7 +92,9 @@ def create_app(
         ValueError: If an unknown ``mode`` is provided.
     """
     if mode not in ("full", "internal", "public"):
-        raise ValueError(f"Unknown mode: {mode!r}. Expected 'full', 'internal', or 'public'.")
+        raise ValueError(
+            f"Unknown mode: {mode!r}. Expected 'full', 'internal', or 'public'."
+        )
 
     # ── Resolve effective CORS ─────────────────────────────────────────
     if enable_cors is None:
@@ -113,6 +116,7 @@ def create_app(
     ronzzdoi_db, db_search_svc, _redirect_svc = init_ronzzdoi_db()
     doi_crud_svc = DOICrudService(ronzzdoi_db)
     citation_formatter = CitationFormatter(doi_crud_svc)
+    snippet_svc = SnippetService(ronzzdoi_db, doi_crud_svc)
 
     # ── Create the FastAPI application ─────────────────────────────────
     docs_url = "/api/docs" if mode != "public" else None
@@ -143,6 +147,7 @@ def create_app(
         mount_doi_routes(app, doi_svc=doi_crud_svc, search_svc=db_search_svc)
         mount_citation_routes(app, citation_formatter)
         mount_search_routes(app, db_search_svc)
+        mount_snippet_routes(app, snippet_svc)
 
         @app.get("/api/health")
         async def health_check() -> dict[str, str]:
@@ -156,6 +161,7 @@ def create_app(
             doi_svc=doi_crud_svc,
             search_svc=db_search_svc,
             formatter=citation_formatter,
+            snippet_svc=snippet_svc,
         )
 
     # Root health endpoint (available in all modes)

@@ -32,15 +32,17 @@ from slowapi.util import get_remote_address
 from starlette.status import HTTP_400_BAD_REQUEST, HTTP_404_NOT_FOUND
 
 from ronzzdoi.citation import CitationFormatter
+from ronzzdoi.db.service import DOIService as DBDOIService
 from ronzzdoi.doi.exceptions import DOIAmbiguousError, DOINotFoundError
 from ronzzdoi.doi.service import DOIService
-from ronzzdoi.db.service import DOIService as DBDOIService
 from ronzzdoi.server.public_schemas import (
     PublicCitationResponse,
     PublicDOIResponse,
     PublicHealthResponse,
     PublicSearchResponse,
+    PublicSnippetResponse,
 )
+from ronzzdoi.snippet.service import SnippetService
 
 # ═══════════════════════════════════════════════════════════════════════
 # slowapi — limiter instance
@@ -58,6 +60,7 @@ _limiter = Limiter(key_func=get_remote_address)
 _doi_svc: DOIService | None = None
 _search_svc: DBDOIService | None = None
 _formatter: CitationFormatter | None = None
+_snippet_svc: SnippetService | None = None
 
 # ── Router ────────────────────────────────────────────────────────────
 router = APIRouter(prefix="/public/v1", tags=["public"])
@@ -73,6 +76,7 @@ def mount_public_routes(
     doi_svc: DOIService,
     search_svc: DBDOIService | None = None,
     formatter: CitationFormatter | None = None,
+    snippet_svc: SnippetService | None = None,
 ) -> None:
     """Register public read-only routes on the FastAPI application.
 
@@ -84,12 +88,15 @@ def mount_public_routes(
         doi_svc: A configured ``DOIService`` instance (DOI CRUD).
         search_svc: An optional ``DOIService`` instance (FTS5 search).
         formatter: An optional ``CitationFormatter`` instance.
+        snippet_svc: An optional ``SnippetService`` instance for the
+            public snippet content endpoint.
     """
-    global _doi_svc, _search_svc, _formatter
+    global _doi_svc, _search_svc, _formatter, _snippet_svc
 
     _doi_svc = doi_svc
     _search_svc = search_svc
     _formatter = formatter
+    _snippet_svc = snippet_svc
 
     # ── slowapi initialisation ──────────────────────────────────────
     app.state.limiter = _limiter
@@ -105,7 +112,9 @@ def mount_public_routes(
 
 def _get_doi_svc() -> DOIService:
     if _doi_svc is None:
-        raise RuntimeError("public_routes not initialised — call mount_public_routes() first")
+        raise RuntimeError(
+            "public_routes not initialised — call mount_public_routes() first"
+        )
     return _doi_svc
 
 
@@ -117,17 +126,23 @@ def _get_formatter() -> CitationFormatter | None:
     return _formatter
 
 
+def _get_snippet_svc() -> SnippetService | None:
+    return _snippet_svc
+
+
 def _record_to_public(record: dict[str, Any]) -> dict[str, Any]:
     """Convert a DOI service record dict to a public-safe response dict.
 
     Excludes: ``status``, ``redirect_history``, ``deleted_at``, ``updated_at``.
 
-    Passes through the optional ``snippet`` key (populated by FTS5 search).
+    Passes through the optional ``snippet`` key (populated by FTS5 search)
+    and the ``content_kind`` key (populated for snippet hits so public
+    consumers can distinguish snippet search results).
     """
     metadata = record.get("metadata")
     if metadata is None:
         metadata = json.loads(record.get("metadata_json", "{}"))
-    return {
+    result = {
         "doi": record["doi"],
         "target_url": record.get("target_url"),
         "title": record.get("title", ""),
@@ -136,6 +151,9 @@ def _record_to_public(record: dict[str, Any]) -> dict[str, Any]:
         "created_at": record["created_at"],
         "snippet": record.get("snippet"),
     }
+    if record.get("content_kind"):
+        result["content_kind"] = record["content_kind"]
+    return result
 
 
 # ── Rate limit helpers (read from env vars at request time) ──────────
@@ -168,6 +186,10 @@ def _citation_rate_limit() -> str:
     return _default_rate_limit("RONZZDOI_PUBLIC_RATE_LIMIT_CITATION", "60/minute")
 
 
+def _snippet_rate_limit() -> str:
+    return _default_rate_limit("RONZZDOI_PUBLIC_RATE_LIMIT_SNIPPET", "100/minute")
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # Endpoints
 # ═══════════════════════════════════════════════════════════════════════
@@ -193,7 +215,9 @@ async def public_resolve_doi(doi: str, request: Request) -> dict[str, Any]:
         raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail=str(exc))
 
     if record is None:
-        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=f"DOI '{doi}' not found.")
+        raise HTTPException(
+            status_code=HTTP_404_NOT_FOUND, detail=f"DOI '{doi}' not found."
+        )
 
     return _record_to_public(record)
 
@@ -296,4 +320,57 @@ async def public_get_citation(
         "doi": doi,
         "style": style,
         "citation": text,
+    }
+
+
+@router.get("/snippet/{doi:path}", response_model=PublicSnippetResponse)
+@_limiter.limit(_snippet_rate_limit)
+async def public_get_snippet(doi: str, request: Request) -> dict[str, Any]:
+    """Return snippet content for embedding (public, read-only).
+
+    No authentication required.  This is the content source for
+    iframe/JS embeds served by the public web app.
+
+    Raises:
+        404: If the DOI does not exist or is not a snippet.
+        410: If the snippet has been tombstoned.
+    """
+    svc = _get_snippet_svc()
+    if svc is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Snippet service not available. No snippet service configured.",
+        )
+
+    try:
+        record = svc.resolve(doi)
+    except DOIAmbiguousError as exc:
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    if record is None:
+        raise HTTPException(
+            status_code=HTTP_404_NOT_FOUND, detail=f"DOI '{doi}' not found."
+        )
+
+    if record.get("deleted_at"):
+        raise HTTPException(
+            status_code=410, detail=f"DOI '{doi}' has been deleted (tombstoned)."
+        )
+
+    if not record.get("content_kind"):
+        raise HTTPException(
+            status_code=HTTP_404_NOT_FOUND,
+            detail=f"DOI '{doi}' exists but is not a snippet.",
+        )
+
+    return {
+        "doi": record["doi"],
+        "title": record.get("title", ""),
+        "content_kind": record["content_kind"],
+        "content": record.get("content", ""),
+        "language": record.get("language", ""),
+        "source_doi": record.get("source_doi"),
+        "page_start": record.get("page_start", ""),
+        "page_end": record.get("page_end", ""),
+        "created_at": record["created_at"],
     }

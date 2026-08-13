@@ -5,6 +5,7 @@
   import DetailTab from "./DetailTab.svelte";
   import ListTab from "./ListTab.svelte";
   import DoiListTab from "./DoiListTab.svelte";
+  import SnippetTab from "./SnippetTab.svelte";
   import StatusPopup from "./StatusPopup.svelte";
   import ErrorPopup from "./ErrorPopup.svelte";
   import LoadingPopup from "./LoadingPopup.svelte";
@@ -40,6 +41,7 @@
     detail: DetailTab,
     list: ListTab,
     "doi-list": DoiListTab,
+    snippet: SnippetTab,
     error: ErrorPopup,
     form: FormTab,
     help: HelpPopup,
@@ -190,6 +192,8 @@
           <ListTab data={tab.data} tabId={tab.id} />
         {:else if tab.type === "doi-list"}
           <DoiListTab data={tab.data} tabId={tab.id} />
+        {:else if tab.type === "snippet"}
+          <SnippetTab data={tab.data} />
         {:else if tab.type === "status"}
           <StatusPopup data={tab.data} />
         {:else if tab.type === "error"}
@@ -292,6 +296,7 @@
       detail: "📖",
       list: "📋",
       status: "📋",
+      snippet: "❝",
       error: "⚠",
       loading: "⏳",
       form: "✏",

@@ -5,13 +5,11 @@ from __future__ import annotations
 import sqlite3
 
 import pytest
-
 from lightercore.db import LighterDB
 from lightercore.exceptions import DataError
 
 from ronzzdoi.db.schema import MIGRATIONS
 from ronzzdoi.db.service import DOIService, RedirectService
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────
 
@@ -42,7 +40,11 @@ class TestSchema:
 
     def test_all_tables_exist(self, db):
         tables = [
-            "dois", "redirects", "dois_fts",
+            "dois",
+            "redirects",
+            "dois_fts",
+            "snippets",
+            "snippets_fts",
         ]
         for name in tables:
             assert db.table_exists(name), f"Missing table: {name}"
@@ -50,12 +52,15 @@ class TestSchema:
     def test_triggers_exist(self, db):
         rows = db.execute(
             "SELECT name FROM sqlite_master WHERE type='trigger' "
-            "AND name LIKE 'dois_fts_%' ORDER BY name"
+            "AND (name LIKE 'dois_fts_%' OR name LIKE 'snippets_fts_%') ORDER BY name"
         )
         names = [r["name"] for r in rows]
         assert "dois_fts_insert" in names
         assert "dois_fts_delete" in names
         assert "dois_fts_update" in names
+        assert "snippets_fts_insert" in names
+        assert "snippets_fts_delete" in names
+        assert "snippets_fts_update" in names
 
     def test_indexes_exist(self, db):
         rows = db.execute(
@@ -67,9 +72,28 @@ class TestSchema:
             "idx_redirects_doi",
             "idx_dois_deleted_at",
             "idx_dois_created_at",
+            "idx_snippets_source_doi",
+            "idx_snippets_deleted_at",
         ]
         for idx in expected:
             assert idx in names, f"Missing index: {idx}"
+
+    def test_snippet_content_kind_check(self, db):
+        """snippets.content_kind CHECK rejects unknown kinds."""
+        import sqlite3
+
+        ts = "2026-01-01T00:00:00+00:00"
+        db.execute(
+            "INSERT INTO dois (doi, target_url, title, doi_type, metadata_json, created_at, updated_at) "
+            "VALUES ('10.ronzz/test-snip', NULL, '', 'snippet', '{}', ?, ?)",
+            (ts, ts),
+        )
+        with pytest.raises(sqlite3.IntegrityError):
+            db.execute(
+                "INSERT INTO snippets (doi, content_kind, content, created_at, updated_at) "
+                "VALUES ('10.ronzz/test-snip', 'image', 'x', ?, ?)",
+                (ts, ts),
+            )
 
     def test_foreign_keys_enabled(self, db):
         row = db.execute_one("PRAGMA foreign_keys")
@@ -91,11 +115,13 @@ class TestDOIService:
 
     def test_create_with_doi(self, doi_svc):
         """Create with valid doi succeeds."""
-        result = doi_svc.create({
-            "doi": "10.ronzz/books/2024/smith",
-            "target_url": "https://example.com/book",
-            "title": "Test Book",
-        })
+        result = doi_svc.create(
+            {
+                "doi": "10.ronzz/books/2024/smith",
+                "target_url": "https://example.com/book",
+                "title": "Test Book",
+            }
+        )
         assert result["doi"] == "10.ronzz/books/2024/smith"
         assert result["target_url"] == "https://example.com/book"
         assert result["title"] == "Test Book"
@@ -104,22 +130,28 @@ class TestDOIService:
 
     def test_create_sets_defaults(self, doi_svc):
         """Default doi_type and metadata are set."""
-        result = doi_svc.create({
-            "doi": "10.ronzz/internal/2024/doc",
-            "target_url": "https://internal.example.com/doc",
-        })
+        result = doi_svc.create(
+            {
+                "doi": "10.ronzz/internal/2024/doc",
+                "target_url": "https://internal.example.com/doc",
+            }
+        )
         assert result["doi_type"] == "external"  # default
 
     def test_get_exact_match(self, doi_svc):
         """get() uses exact match, not prefix."""
-        doi_svc.create({
-            "doi": "10.ronzz/books/2024/smith",
-            "target_url": "https://example.com/smith",
-        })
-        doi_svc.create({
-            "doi": "10.ronzz/books/2024/smith-2nd-ed",
-            "target_url": "https://example.com/smith-2nd",
-        })
+        doi_svc.create(
+            {
+                "doi": "10.ronzz/books/2024/smith",
+                "target_url": "https://example.com/smith",
+            }
+        )
+        doi_svc.create(
+            {
+                "doi": "10.ronzz/books/2024/smith-2nd-ed",
+                "target_url": "https://example.com/smith-2nd",
+            }
+        )
 
         result = doi_svc.get("10.ronzz/books/2024/smith")
         assert result is not None
@@ -138,23 +170,30 @@ class TestDOIService:
 
     def test_update(self, doi_svc):
         """update() changes fields and bumps updated_at."""
-        doi_svc.create({
-            "doi": "10.ronzz/books/2024/smith",
-            "target_url": "https://example.com/original",
-        })
-        updated = doi_svc.update("10.ronzz/books/2024/smith", {
-            "target_url": "https://example.com/updated",
-        })
+        doi_svc.create(
+            {
+                "doi": "10.ronzz/books/2024/smith",
+                "target_url": "https://example.com/original",
+            }
+        )
+        updated = doi_svc.update(
+            "10.ronzz/books/2024/smith",
+            {
+                "target_url": "https://example.com/updated",
+            },
+        )
         assert updated is not None
         assert updated["target_url"] == "https://example.com/updated"
         assert updated["updated_at"] != updated["created_at"]
 
     def test_delete(self, doi_svc):
         """delete() removes a DOI."""
-        doi_svc.create({
-            "doi": "10.ronzz/books/2024/temp",
-            "target_url": "https://example.com/temp",
-        })
+        doi_svc.create(
+            {
+                "doi": "10.ronzz/books/2024/temp",
+                "target_url": "https://example.com/temp",
+            }
+        )
         assert doi_svc.delete("10.ronzz/books/2024/temp", soft=False) is True
         assert doi_svc.get("10.ronzz/books/2024/temp") is None
 
@@ -164,18 +203,22 @@ class TestDOIService:
 
 class TestSearch:
     def test_search_fts_finds_matching_dois(self, doi_svc):
-        doi_svc.create({
-            "doi": "10.ronzz/books/2024/smith",
-            "target_url": "https://example.com/smith",
-            "title": "Advanced Python Programming",
-            "metadata_json": '{"author": "John Smith"}',
-        })
-        doi_svc.create({
-            "doi": "10.ronzz/books/2024/jones",
-            "target_url": "https://example.com/jones",
-            "title": "Data Science with Python",
-            "metadata_json": '{"author": "Alice Jones"}',
-        })
+        doi_svc.create(
+            {
+                "doi": "10.ronzz/books/2024/smith",
+                "target_url": "https://example.com/smith",
+                "title": "Advanced Python Programming",
+                "metadata_json": '{"author": "John Smith"}',
+            }
+        )
+        doi_svc.create(
+            {
+                "doi": "10.ronzz/books/2024/jones",
+                "target_url": "https://example.com/jones",
+                "title": "Data Science with Python",
+                "metadata_json": '{"author": "Alice Jones"}',
+            }
+        )
 
         results = doi_svc.search_fts("python")
         assert len(results) >= 2  # both match "Python" in title
@@ -189,42 +232,50 @@ class TestSearch:
         assert doi_svc.search_fts("   ") == []
 
     def test_search_fts_exact_phrase(self, doi_svc):
-        doi_svc.create({
-            "doi": "10.ronzz/books/2024/test",
-            "target_url": "https://example.com/test",
-            "title": "Machine Learning for Beginners",
-        })
+        doi_svc.create(
+            {
+                "doi": "10.ronzz/books/2024/test",
+                "target_url": "https://example.com/test",
+                "title": "Machine Learning for Beginners",
+            }
+        )
 
         results = doi_svc.search_fts('"Machine Learning"')
         assert len(results) >= 1
 
     def test_search_fts_prefix(self, doi_svc):
-        doi_svc.create({
-            "doi": "10.ronzz/books/2024/test",
-            "target_url": "https://example.com/test",
-            "title": "Machine Learning Fundamentals",
-        })
+        doi_svc.create(
+            {
+                "doi": "10.ronzz/books/2024/test",
+                "target_url": "https://example.com/test",
+                "title": "Machine Learning Fundamentals",
+            }
+        )
 
         results = doi_svc.search_fts("Machine*")
         assert len(results) >= 1
 
     def test_unified_search_defaults_to_fts(self, doi_svc):
-        doi_svc.create({
-            "doi": "10.ronzz/books/2024/smith",
-            "target_url": "https://example.com/smith",
-            "title": "Python Programming",
-        })
+        doi_svc.create(
+            {
+                "doi": "10.ronzz/books/2024/smith",
+                "target_url": "https://example.com/smith",
+                "title": "Python Programming",
+            }
+        )
 
         results = doi_svc.search("python")
         assert len(results) >= 1
 
     def test_unified_search_semantic_fallback(self, doi_svc):
         """Semantic search falls back to FTS5 when vec not available."""
-        doi_svc.create({
-            "doi": "10.ronzz/books/2024/smith",
-            "target_url": "https://example.com/smith",
-            "title": "Python Programming",
-        })
+        doi_svc.create(
+            {
+                "doi": "10.ronzz/books/2024/smith",
+                "target_url": "https://example.com/smith",
+                "title": "Python Programming",
+            }
+        )
 
         # lightersearch not installed, so semantic should fall back to FTS5
         results = doi_svc.search("python", mode="semantic")
@@ -236,25 +287,31 @@ class TestSearch:
 
 class TestRedirectService:
     def test_create_redirect(self, doi_svc, red_svc):
-        doi_svc.create({
-            "doi": "10.ronzz/books/2024/smith",
-            "target_url": "https://example.com/smith",
-        })
-        red = red_svc.create({
-            "redirect_id": "red-001",
-            "doi": "10.ronzz/books/2024/smith",
-            "old_url": "https://oldsite.com/smith",
-            "note": "Site migration",
-        })
+        doi_svc.create(
+            {
+                "doi": "10.ronzz/books/2024/smith",
+                "target_url": "https://example.com/smith",
+            }
+        )
+        red = red_svc.create(
+            {
+                "redirect_id": "red-001",
+                "doi": "10.ronzz/books/2024/smith",
+                "old_url": "https://oldsite.com/smith",
+                "note": "Site migration",
+            }
+        )
         assert red["redirect_id"] == "red-001"
 
     def test_redirect_foreign_key(self, red_svc):
         with pytest.raises(sqlite3.IntegrityError):
-            red_svc.create({
-                "redirect_id": "red-orphan",
-                "doi": "10.ronzz/nonexistent",
-                "old_url": "https://example.com",
-            })
+            red_svc.create(
+                {
+                    "redirect_id": "red-orphan",
+                    "doi": "10.ronzz/nonexistent",
+                    "old_url": "https://example.com",
+                }
+            )
 
 
 # ── Schema constraints ─────────────────────────────────────────────────
@@ -291,7 +348,9 @@ class TestLightersearchWiring:
 
     def test_probe_false_when_lightersearch_unavailable(self, db, mocker):
         """_probe_lightersearch sets _vec_available=False when lightersearch is missing."""
-        mocker.patch("lightersearch.vec.available", side_effect=ImportError("no module"))
+        mocker.patch(
+            "lightersearch.vec.available", side_effect=ImportError("no module")
+        )
         svc = DOIService(db)
         assert svc._vec_available is False
 
@@ -306,17 +365,19 @@ class TestLightersearchWiring:
         # Create DOI first WITHOUT vec enabled (to avoid _post_create triggering)
         mocker.patch("lightersearch.vec.available", return_value=False)
         svc = DOIService(db)
-        svc.create({
-            "doi": "10.ronzz/test/sync",
-            "target_url": "https://example.com",
-            "title": "Test Title",
-            "metadata_json": '{"author": "Test Creator"}',
-        })
+        svc.create(
+            {
+                "doi": "10.ronzz/test/sync",
+                "target_url": "https://example.com",
+                "title": "Test Title",
+                "metadata_json": '{"author": "Test Creator"}',
+            }
+        )
 
         # Now enable vec and set up mocks for the sync call
         svc._vec_available = True
         mock_embed = mocker.patch("lightersearch.embed.embed_single")
-        mock_embed.return_value = __import__("numpy").array([0.1] * 384, dtype="float32")
+        mock_embed.return_value = [0.1] * 384
 
         mock_to_bytes = mocker.patch("lightersearch.embed.vector_to_bytes")
         mock_to_bytes.return_value = b"fakevec"
@@ -349,13 +410,17 @@ class TestLightersearchWiring:
         svc = DOIService(db)
         svc._vec_available = True
 
-        svc.create({
-            "doi": "10.ronzz/test/fail",
-            "target_url": "https://example.com",
-            "title": "Test",
-        })
+        svc.create(
+            {
+                "doi": "10.ronzz/test/fail",
+                "target_url": "https://example.com",
+                "title": "Test",
+            }
+        )
 
-        mocker.patch("lightersearch.embed.embed_single", side_effect=RuntimeError("model fail"))
+        mocker.patch(
+            "lightersearch.embed.embed_single", side_effect=RuntimeError("model fail")
+        )
         mock_log = mocker.patch("logging.Logger.warning")
 
         # Should not raise
@@ -367,10 +432,12 @@ class TestLightersearchWiring:
         # Create DOI first WITHOUT vec enabled
         mocker.patch("lightersearch.vec.available", return_value=False)
         svc = DOIService(db)
-        svc.create({
-            "doi": "10.ronzz/test/rm",
-            "target_url": "https://example.com",
-        })
+        svc.create(
+            {
+                "doi": "10.ronzz/test/rm",
+                "target_url": "https://example.com",
+            }
+        )
 
         # Now enable vec and set up mocks
         svc._vec_available = True
@@ -408,7 +475,9 @@ class TestLightersearchWiring:
         svc = DOIService(db)
         svc._vec_available = True
 
-        mocker.patch("lightersearch.search.search_dois", side_effect=RuntimeError("search fail"))
+        mocker.patch(
+            "lightersearch.search.search_dois", side_effect=RuntimeError("search fail")
+        )
         results = svc._search_semantic("test")
         assert results == []
 
@@ -417,11 +486,13 @@ class TestLightersearchWiring:
         mocker.patch("lightersearch.vec.available", return_value=False)
         svc = DOIService(db)
 
-        svc.create({
-            "doi": "10.ronzz/test/fallback",
-            "target_url": "https://example.com",
-            "title": "Python Programming",
-        })
+        svc.create(
+            {
+                "doi": "10.ronzz/test/fallback",
+                "target_url": "https://example.com",
+                "title": "Python Programming",
+            }
+        )
 
         # vec not available → should use FTS5
         mock_fts = mocker.spy(svc, "search_fts")
@@ -503,7 +574,9 @@ class TestInitDB:
         assert isinstance(doi_svc, DOIService)
         assert isinstance(red_svc, RedirectService)
 
-    def test_init_db_creates_vec_table_when_lightersearch_available(self, tmp_path, mocker):
+    def test_init_db_creates_vec_table_when_lightersearch_available(
+        self, tmp_path, mocker
+    ):
         """init_db() creates vec_dois when lightersearch is installed."""
         mock_data_dir = tmp_path / "data"
         mock_data_dir.mkdir()
@@ -514,7 +587,7 @@ class TestInitDB:
         # Ensure _after_connect runs (lightersearch is installed in this env)
         from ronzzdoi.db import init_db
 
-        db, doi_svc, red_svc = init_db("test_ronzzdoi_vec")
+        db, _, _ = init_db("test_ronzzdoi_vec")
 
         # vec_dois should exist only if sqlite-vec extension loaded
         from lightersearch.vec import available as vec_available
@@ -530,7 +603,7 @@ class TestInitDB:
         mocker.patch("ronzzdoi.db.ensure_dirs")
         mocker.patch("ronzzdoi.db.set_app_name")
 
-        from ronzzdoi.db import get_db, _db_state
+        from ronzzdoi.db import _db_state, get_db
 
         _db_state.clear()
 

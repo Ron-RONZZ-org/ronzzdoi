@@ -25,11 +25,19 @@ from starlette.status import (
     HTTP_422_UNPROCESSABLE_ENTITY,
 )
 
-from ronzzdoi.doi.constants import DOI_PREFIX, is_doi_prefix, is_valid_doi
-from ronzzdoi.doi.exceptions import DOIAmbiguousError, DOIExistsError, DOIInvalidError, DOINotFoundError
-from ronzzdoi.doi.schema import DOIAssignRequest, DOIModifyRequest, DOIResolveResponse, DOIResponse
-from ronzzdoi.doi.service import DOIService
 from ronzzdoi.db.service import DOIService as DBDOIService
+from ronzzdoi.doi.constants import is_doi_prefix
+from ronzzdoi.doi.exceptions import (
+    DOIAmbiguousError,
+    DOIExistsError,
+    DOIInvalidError,
+    DOINotFoundError,
+)
+from ronzzdoi.doi.schema import (
+    DOIAssignRequest,
+    DOIModifyRequest,
+)
+from ronzzdoi.doi.service import DOIService
 from ronzzdoi.server.auth_middleware import require_permission
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -50,7 +58,9 @@ router = APIRouter(tags=["doi"])
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def mount_doi_routes(app: Any, doi_svc: DOIService, search_svc: DBDOIService | None = None) -> None:
+def mount_doi_routes(
+    app: Any, doi_svc: DOIService, search_svc: DBDOIService | None = None
+) -> None:
     """Register DOI API routes on the FastAPI application.
 
     Call this BEFORE ``register_doi_redirect(app)`` so that API
@@ -79,7 +89,9 @@ def register_doi_redirect(app: Any) -> None:
     """
     redirect_router = APIRouter()
 
-    @redirect_router.api_route("/{doi:path}", methods=["GET", "HEAD"], include_in_schema=False)
+    @redirect_router.api_route(
+        "/{doi:path}", methods=["GET", "HEAD"], include_in_schema=False
+    )
     async def redirect_doi(doi: str, request: Request) -> Response:
         return _handle_redirect(doi, request)
 
@@ -94,22 +106,32 @@ def register_doi_redirect(app: Any) -> None:
 def _get_doi_svc() -> DOIService:
     """Return the module-level DOIService or raise."""
     if _doi_svc is None:
-        raise RuntimeError("doi_routes not initialised. Call mount_doi_routes() during startup.")
+        raise RuntimeError(
+            "doi_routes not initialised. Call mount_doi_routes() during startup."
+        )
     return _doi_svc
 
 
-def _record_to_response(record: dict[str, Any], include_status: bool = False) -> dict[str, Any]:
+def _record_to_response(
+    record: dict[str, Any], include_status: bool = False
+) -> dict[str, Any]:
     """Convert a DOI service record dict to an API response dict."""
     result = {
         "doi": record["doi"],
         "target_url": record.get("target_url"),
         "title": record.get("title", ""),
         "doi_type": record.get("doi_type", "external"),
-        "metadata": record.get("metadata", json.loads(record.get("metadata_json", "{}"))),
+        "metadata": record.get(
+            "metadata", json.loads(record.get("metadata_json", "{}"))
+        ),
         "created_at": record["created_at"],
         "updated_at": record["updated_at"],
         "deleted_at": record.get("deleted_at"),
     }
+    if record.get("content_kind"):
+        # Snippet hits from unified search carry content_kind — pass it
+        # through so the frontend can render them distinctly.
+        result["content_kind"] = record["content_kind"]
     if include_status:
         result["status"] = record.get("status", "active")
         result["redirect_history"] = record.get("redirect_history", [])
@@ -126,7 +148,9 @@ class DOIMergeRequest(BaseModel):
 
     source_doi: str = Field(..., description="DOI to merge from (will be tombstoned)")
     target_doi: str = Field(..., description="DOI to merge into")
-    delete_source: bool = Field(default=True, description="If True, tombstone the source after merge")
+    delete_source: bool = Field(
+        default=True, description="If True, tombstone the source after merge"
+    )
 
 
 @router.post("/api/v1/doi/merge")
@@ -197,7 +221,12 @@ async def search_dois(
         results = svc.list_dois(limit=limit, offset=offset)
         if doi_type:
             results = [r for r in results if r.get("doi_type") == doi_type]
-        return {"items": [_record_to_response(r) for r in results], "total": len(results), "limit": limit, "offset": offset}
+        return {
+            "items": [_record_to_response(r) for r in results],
+            "total": len(results),
+            "limit": limit,
+            "offset": offset,
+        }
 
     if _search_svc is not None:
         results = _search_svc.search_fts(q, limit=limit)
@@ -207,7 +236,12 @@ async def search_dois(
     if doi_type:
         results = [r for r in results if r.get("doi_type") == doi_type][:limit]
 
-    return {"items": [_record_to_response(r) for r in results], "total": len(results), "limit": limit, "offset": offset}
+    return {
+        "items": [_record_to_response(r) for r in results],
+        "total": len(results),
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -254,7 +288,9 @@ async def resolve_doi(
         raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail=str(exc))
 
     if record is None:
-        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=f"DOI '{doi}' not found.")
+        raise HTTPException(
+            status_code=HTTP_404_NOT_FOUND, detail=f"DOI '{doi}' not found."
+        )
 
     return _record_to_response(record, include_status=True)
 
@@ -297,7 +333,9 @@ async def delete_doi(
         raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail=str(exc))
 
     if not deleted:
-        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=f"DOI '{doi}' not found.")
+        raise HTTPException(
+            status_code=HTTP_404_NOT_FOUND, detail=f"DOI '{doi}' not found."
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -337,7 +375,9 @@ def _handle_redirect(doi: str, request: Request) -> Response:
     if record.get("deleted_at"):
         return Response(
             status_code=410,
-            content=bytes(f'{{"detail":"DOI \'{doi}\' has been deleted (tombstoned)."}}', "utf-8"),
+            content=bytes(
+                f'{{"detail":"DOI \'{doi}\' has been deleted (tombstoned)."}}', "utf-8"
+            ),
             media_type="application/json",
         )
 
@@ -345,4 +385,6 @@ def _handle_redirect(doi: str, request: Request) -> Response:
     if not target_url:
         return Response(status_code=HTTP_204_NO_CONTENT)
 
-    return RedirectResponse(url=target_url, status_code=HTTP_302_FOUND, headers={"X-DOI": doi})
+    return RedirectResponse(
+        url=target_url, status_code=HTTP_302_FOUND, headers={"X-DOI": doi}
+    )

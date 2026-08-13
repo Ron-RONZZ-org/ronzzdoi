@@ -8,10 +8,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from ronzzdoi.citation.schemas import DOC_TYPE_SCHEMAS, DOC_TYPES, ENTITY_TYPES, validate_metadata
-from ronzzdoi.citation.styles import STYLES, available_styles as _available_styles
-from ronzzdoi.doi.exceptions import DOINotFoundError
+from ronzzdoi.citation.schemas import (
+    validate_metadata,
+)
+from ronzzdoi.citation.styles import STYLES
+from ronzzdoi.citation.styles import available_styles as _available_styles
 from ronzzdoi.db.service import DOIService
+from ronzzdoi.doi.exceptions import DOINotFoundError
 
 
 class CitationFormatter:
@@ -57,6 +60,12 @@ class CitationFormatter:
         record = self._resolve(doi)
         if record is None:
             raise DOINotFoundError(doi)
+
+        if record.get("doi_type") == "snippet":
+            raise ValueError(
+                f"DOI '{doi}' is a snippet (embeddable content), not a citable "
+                "record. Citations are only generated for citation doc_types."
+            )
 
         formatter = STYLES.get(style)
         if formatter is None:
