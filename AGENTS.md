@@ -281,17 +281,25 @@ PYTHONPATH=src /path/to/main/checkout/.venv/bin/python -m pytest tests/...
 | OS | Ubuntu 24.04 LTS |
 | Service user | `ronzz` (system user, no shell) |
 | App path | `/opt/ronzzdoi/` |
-| Data path | `/opt/ronzzdoi/data/` (SQLite WAL) |
-| Systemd unit | `ronzzdoi.service` |
+| Data path | `/opt/ronzzdoi/.local/share/ronzzdoi/` (SQLite WAL; the `data/` dir is unused) |
+| Systemd units | `ronzzdoi.service` (public, read-only) + `ronzzdoi-internal.service` (write API) |
 | Dependency paths | `/opt/lightercore/`, `/opt/lighterauth/`, `/opt/lightersearch/` |
 
 ### Service
 
-- **API**: FastAPI public mode, `127.0.0.1:8012`
-- **CLI entry point**: `ronzzdoi-server --mode public --host 127.0.0.1 --port 8012`
-- **Start**: `sudo systemctl start ronzzdoi`
-- **Logs**: `sudo journalctl -u ronzzdoi -f`
-- **Health**: `curl http://127.0.0.1:8012/` → `{"status":"ok","service":"ronzzdoi"}`
+Two FastAPI processes share the same SQLite data:
+
+- **Public (read-only)** — `ronzzdoi.service`, `--mode public`, `127.0.0.1:8012`.
+  Rate-limited `/public/v1/*` only. Powers the public web + embeds.
+- **Internal (write)** — `ronzzdoi-internal.service`, `--mode internal`,
+  `127.0.0.1:8011`. Auth-protected `/api/v1/*` (DOIs, snippets, citations,
+  commands, API keys). Exposed publicly at `https://doi-admin.ronzz.org`.
+
+Commands:
+- **Start**: `sudo systemctl start ronzzdoi` / `... ronzzdoi-internal`
+- **Logs**: `sudo journalctl -u ronzzdoi -f` / `... ronzzdoi-internal`
+- **Health**: `curl http://127.0.0.1:8012/` (public) and
+  `curl http://127.0.0.1:8011/api/health` (internal)
 
 ### Auto-deploy (GitHub Actions)
 
@@ -304,10 +312,12 @@ ronzzdoi-public-web).
 ### nginx + DNS
 
 - `doi.ronzz.org:80` → `127.0.0.1:4321` (ronzzdoi-public-web)
-- `doi-api.ronzz.org` → `127.0.0.1:8012` (public API for CLI, Cloudflare proxied + Full strict)
+- `doi-api.ronzz.org` → `127.0.0.1:8012` (public read API, Cloudflare proxied + Full strict)
+- `doi-admin.ronzz.org` → `127.0.0.1:8011` (internal write API, Cloudflare proxied + Full strict, key-protected)
 - Cloudflare `proxied: true` — TLS terminated at Cloudflare edge
+- Origin certs via acme.sh (DNS-01 + `CF_Token`) per subdomain; auto-renewed by
+  the daily cron, `--install-cert` with `systemctl reload nginx` reloadcmd
 - Fallback Let's Encrypt cert on port 443 for direct-IP access
-- Auto-renewal via acme.sh cron with `CF_Token` in `sudo crontab`
 
 ---
 

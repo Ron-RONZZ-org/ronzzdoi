@@ -141,17 +141,27 @@ bare identifier.
 
 ### Use the CLI against production
 
-The public API is exposed at `https://doi-api.ronzz.org` (behind Cloudflare,
-end-to-end TLS):
+Two production API endpoints exist:
+
+| Endpoint | Purpose | Auth |
+|----------|---------|------|
+| `https://doi-api.ronzz.org` | **read-only** public API (search, resolve, citation, snippet content) | none (rate-limited) |
+| `https://doi-admin.ronzz.org` | **write** API (assign/modify DOIs, snippets, API keys) | Bearer API key |
 
 ```bash
+# Read-only queries (no key needed)
 export RONZZDOI_SERVER=https://doi-api.ronzz.org
-export RONZZDOI_API_KEY="la_a_abc123..."        # key from an admin
-
-# Query production data
 ronzzdoi doi search
 ronzzdoi doi resolve 10.ronzz/<suffix>
 ronzzdoi citation show 10.ronzz/<suffix> --style apa
+
+# Writes — point at the admin API with a key from an admin
+export RONZZDOI_SERVER=https://doi-admin.ronzz.org
+export RONZZDOI_API_KEY="la_a_abc123..."
+ronzzdoi doi assign https://example.com --title "My Book" --type book
+ronzzdoi snippet assign --type text --content "To be, or not to be…" \
+    --source-doi 10.ronzz/<book> --page-start "Act 3"
+ronzzdoi snippet embed 10.ronzz/<snippet>   # prints the <iframe> tag
 ```
 
 If you have SSH access to the production server, you can also run the CLI
@@ -160,16 +170,39 @@ directly on the server against the local API:
 ```bash
 ssh ronzz-linux-server-2
 sudo -u ronzz HOME=/opt/ronzzdoi /opt/ronzzdoi/.venv/bin/ronzzdoi \
-  --server http://127.0.0.1:8012 --api-key "la_a_..."
+  --server http://127.0.0.1:8012 --api-key "la_a_..."    # read-only (public mode)
+# or the write API:
+sudo -u ronzz HOME=/opt/ronzzdoi /opt/ronzzdoi/.venv/bin/ronzzdoi \
+  --server http://127.0.0.1:8011 --api-key "la_a_..."    # writes (internal mode)
 ```
 
 The CLI reads its server URL from the `RONZZDOI_SERVER` environment variable
 (default: `http://127.0.0.1:8011`). Pass `--server <url>` to override inline.
 
+### Use the GUI against production
+
+The Svelte GUI (dev tool) proxies `/api` to a backend. Point it at the
+remote **write** API directly (no tunnel needed):
+
+```bash
+cd web
+RONZZDOI_API_URL=https://doi-admin.ronzz.org npm run dev
+# open http://127.0.0.1:6025, paste your API key, type !snippet assign …
+```
+
+Or use an SSH tunnel against the server's loopback internal API:
+
+```bash
+ssh -L 8011:127.0.0.1:8011 ronzz-linux-server-2   # keep this terminal open
+cd web && RONZZDOI_PORT=8011 npm run dev
+```
+
 ### Use the public web
 
 For **read-only** search, browsing, and citation formatting, visit
 **[https://doi.ronzz.org](https://doi.ronzz.org)** — no API key required.
+Snippet embeds live at `https://doi.ronzz.org/embed/10.ronzz/<suffix>` and
+are frameable by any ronzz site.
 
 ### Obtain a production API key
 
