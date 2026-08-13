@@ -67,6 +67,13 @@ class DOIResponse(BaseModel):
     title: str = ""
     doi_type: str = "external"
     metadata: dict[str, Any] = Field(default_factory=dict)
+    resolve_url: str | None = Field(
+        default=None,
+        description=(
+            "Browser-resolvable URL for this DOI (instance base URL + "
+            "canonical DOI). Typing it in a browser redirects to the target."
+        ),
+    )
     created_at: str
     updated_at: str
     deleted_at: str | None = None

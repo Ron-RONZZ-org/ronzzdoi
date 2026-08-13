@@ -67,3 +67,14 @@ src/ronzzdoi/doi/
 - **Requires**: `lightercore` (LighterDB, CRUDService)
 - **Depends on schema**: `dois` and `redirects` tables (defined in DB module)
 - **Imported by**: CLI module, Server module, Citation module
+
+## API Response Shape
+
+- **`resolve_url`**: DOI responses (`doi_routes._record_to_response` and the
+  command endpoint's `_inject_resolve_url`) include a browser-resolvable URL
+  (`<request base url>/<doi>`) so the GUI can copy/click a DOI that actually
+  redirects when typed in a browser.
+- **`GET /api/v1/doi/types`**: returns the supported `doi_type` values
+  (citation `DOC_TYPES` + `ENTITY_TYPES` + `external`) and the per-type
+  metadata field schemas from `citation.schemas.DOC_TYPE_SCHEMAS`, used by
+  the GUI assign/modify form for its type dropdown and guided metadata input.
