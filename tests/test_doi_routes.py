@@ -189,6 +189,30 @@ class TestAssignEndpoint:
         assert data["title"] == "Test Book"
         assert data["metadata"]["author"] == "Test Author"
 
+    def test_assign_multilingual_title(
+        self, doi_client: TestClient, admin_api_key_admin: str
+    ) -> None:
+        """A language-map title round-trips through the API as a dict."""
+        resp = doi_client.post(
+            "/api/v1/doi",
+            json={
+                "target_url": "https://example.org/inception",
+                "doi_type": "film",
+                "title": {"en": "Inception", "fr": "Inception"},
+            },
+            headers=_auth_header(admin_api_key_admin),
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["title"] == {"en": "Inception", "fr": "Inception"}
+
+        # Resolve returns the same language map.
+        doi = resp.json()["doi"]
+        resolved = doi_client.get(
+            f"/api/v1/doi/{doi}", headers=_auth_header(admin_api_key_admin)
+        )
+        assert resolved.status_code == 200, resolved.text
+        assert resolved.json()["title"] == {"en": "Inception", "fr": "Inception"}
+
     def test_assign_entity_no_url(
         self, doi_client: TestClient, admin_api_key_admin: str
     ) -> None:
@@ -420,6 +444,23 @@ class TestListEndpoint:
         assert doomed["doi"] not in dois, "tombstoned DOI should be excluded"
         assert all(not item.get("deleted_at") for item in data["items"])
 
+    def test_list_normalizes_multilingual_title(
+        self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
+    ) -> None:
+        """List responses deserialize JSON-string titles into language maps."""
+        doi_crud_svc.assign(
+            "https://example.org/inception",
+            doi_type="film",
+            title={"en": "Inception", "fr": "Inception"},
+        )
+        resp = doi_client.get(
+            "/api/v1/doi", headers=_auth_header(admin_api_key_admin)
+        )
+        assert resp.status_code == 200, resp.text
+        assert {"en": "Inception", "fr": "Inception"} in [
+            item["title"] for item in resp.json()["items"]
+        ]
+
     def test_list_include_deleted(
         self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
     ) -> None:
@@ -576,3 +617,141 @@ class TestSearchEndpoint:
             headers=_auth_header(admin_api_key_admin),
         )
         assert resp.status_code == 200, resp.text
+
+
+# ── Test: resolve_url in API responses ────────────────────────────────────
+
+
+class TestResolveUrl:
+    """``resolve_url`` — browser-resolvable DOI URL in API responses."""
+
+    def test_resolve_includes_resolve_url(
+        self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
+    ) -> None:
+        """Resolve returns resolve_url built from the request base URL."""
+        created = doi_crud_svc.assign("https://example.com")
+        resp = doi_client.get(
+            f"/api/v1/doi/{created['doi']}",
+            headers=_auth_header(admin_api_key_admin),
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["resolve_url"] == f"http://testserver/{created['doi']}"
+
+    def test_list_items_include_resolve_url(
+        self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
+    ) -> None:
+        """List/search items each carry a resolve_url."""
+        doi_crud_svc.assign("https://example.com", title="Listed")
+        for path in ("/api/v1/doi", "/api/v1/doi/search?q=listed"):
+            resp = doi_client.get(path, headers=_auth_header(admin_api_key_admin))
+            assert resp.status_code == 200, resp.text
+            for item in resp.json()["items"]:
+                assert item["resolve_url"].startswith("http://testserver/10.ronzz/")
+                assert item["resolve_url"].endswith(item["doi"])
+
+    def test_assign_includes_resolve_url(
+        self, doi_client: TestClient, admin_api_key_admin: str
+    ) -> None:
+        """POST assign returns a resolve_url for the new DOI."""
+        resp = doi_client.post(
+            "/api/v1/doi",
+            headers=_auth_header(admin_api_key_admin),
+            json={"target_url": "https://example.com", "title": "New"},
+        )
+        assert resp.status_code == 201, resp.text
+        data = resp.json()
+        assert data["resolve_url"] == f"http://testserver/{data['doi']}"
+
+
+# ── Test: GET /api/v1/doi/types ───────────────────────────────────────────
+
+
+class TestDoiTypesEndpoint:
+    """``GET /api/v1/doi/types`` — DOI types + metadata field schemas."""
+
+    def test_unauthenticated(self, doi_client: TestClient) -> None:
+        """GET without auth → 401."""
+        resp = doi_client.get("/api/v1/doi/types")
+        assert resp.status_code == 401, resp.text
+
+    def test_returns_types_and_schemas(
+        self, doi_client: TestClient, admin_api_key_admin: str
+    ) -> None:
+        """Returns all citation doc types + entity types + schemas."""
+        resp = doi_client.get(
+            "/api/v1/doi/types", headers=_auth_header(admin_api_key_admin)
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        for expected in ("external", "book", "film", "webpage", "person", "country"):
+            assert expected in data["types"], f"missing type: {expected}"
+
+        book = data["schemas"].get("book")
+        assert book is not None, "book schema missing"
+        fields = {f["name"]: f for f in book}
+        for name in ("authors", "title", "publisher", "year"):
+            assert name in fields, f"book schema missing field: {name}"
+        assert fields["authors"]["required"] is True
+        assert "list" in fields["authors"]["types"]
+        assert fields["year"]["types"] in (["int", "str"], ["str", "int"])
+
+    def test_entity_types_have_no_schema(
+        self, doi_client: TestClient, admin_api_key_admin: str
+    ) -> None:
+        """Entity types (person, country) have no metadata schema."""
+        resp = doi_client.get(
+            "/api/v1/doi/types", headers=_auth_header(admin_api_key_admin)
+        )
+        data = resp.json()
+        assert "person" not in data["schemas"]
+        assert "country" not in data["schemas"]
+
+
+# ── Test: resolve_url injection via command endpoint ──────────────────────
+
+
+class TestCommandResolveUrl:
+    """``POST /api/v1/command`` — GUI data path gets resolve_url injected."""
+
+    def test_doi_resolve_detail_gets_resolve_url(
+        self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
+    ) -> None:
+        """!doi resolve via the command endpoint returns resolve_url."""
+        created = doi_crud_svc.assign("https://example.com", title="Cmd")
+        resp = doi_client.post(
+            "/api/v1/command",
+            headers=_auth_header(admin_api_key_admin),
+            json={
+                "tokens": ["doi", "resolve", created["doi"]],
+                "flags": {},
+                "raw_input": f"!doi resolve {created['doi']}",
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()["data"]
+        assert data["doi"] == created["doi"]
+        assert data["resolve_url"] == f"http://testserver/{created['doi']}"
+
+    def test_doi_search_list_gets_resolve_url(
+        self, doi_client: TestClient, doi_crud_svc, admin_api_key_admin: str
+    ) -> None:
+        """!doi search results each carry a resolve_url."""
+        doi_crud_svc.assign("https://example.com", title="Searched Cmd")
+        resp = doi_client.post(
+            "/api/v1/command",
+            headers=_auth_header(admin_api_key_admin),
+            json={"tokens": ["doi", "search", "Searched Cmd"], "flags": {}, "raw_input": "!doi search Searched Cmd"},
+        )
+        assert resp.status_code == 200, resp.text
+        for item in resp.json()["data"]["results"]:
+            assert item["resolve_url"].startswith("http://testserver/10.ronzz/")
+            assert item["resolve_url"].endswith(item["doi"])
+
+    def test_unauthenticated(self, doi_client: TestClient) -> None:
+        """POST without auth → 401."""
+        resp = doi_client.post(
+            "/api/v1/command",
+            json={"tokens": ["doi", "resolve", "x"], "flags": {}, "raw_input": "!doi resolve x"},
+        )
+        assert resp.status_code == 401, resp.text

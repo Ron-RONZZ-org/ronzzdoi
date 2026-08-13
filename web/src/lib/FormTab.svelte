@@ -8,7 +8,17 @@
 
   import { tabStore } from "@lightercore/ui/tabStore.svelte.js";
   import { banner } from "@lightercore/ui/bannerStore.svelte.js";
-  import { execute, deriveIdKey } from "./commandExecutor.js";
+  import { deriveIdKey } from "./commandExecutor.js";
+  import { doiApi } from "./api.js";
+  import { formatKey } from "./formatValue.js";
+  import {
+    buildTitle,
+    fieldsToMetadata,
+    metadataToFormValues,
+    parseMetadata,
+    titleToFormValue,
+    titleToTranslations,
+  } from "./doiForm.js";
 
   import { onMount } from "svelte";
 
@@ -19,32 +29,95 @@
   // ── Form state ────────────────────────────────────────────────────────
   let fieldValues = $state({});
   let submitting = $state(false);
-
-  // Copy initial data on mount — the $state only captures initial values
-  // from props once, which is the correct behavior for form fields.
-  onMount(() => {
-    fieldValues = { ...initialData };
-  });
   let formError = $state("");
 
+  // ── DOI type catalog (from GET /api/v1/doi/types) ─────────────────────
+  let typeOptions = $state([]);
+  let typeSchemas = $state({});
+
+  // ── Multilingual title translations (doi forms) ───────────────────────
+  let titleTranslations = $state([]);
+  let titleI18nOpen = $state(false);
+
+  // Copy initial data on mount, then fetch the DOI type catalog for the
+  // autocomplete dropdown and the type-specific metadata schemas (the
+  // backend is the source of truth).  The $state only captures initial
+  // values from props once, which is the correct behavior for form fields.
+  onMount(async () => {
+    fieldValues = { ...initialData };
+    titleTranslations = titleToTranslations(initialData.title);
+    try {
+      const catalog = await doiApi.types();
+      typeOptions = catalog.types || [];
+      typeSchemas = catalog.schemas || {};
+
+      // Prefill dynamic metadata fields (modify form) from the record.
+      const selectedType = fieldValues.doi_type || "";
+      const schema = typeSchemas[selectedType];
+      const existingMetadata = parseMetadata(fieldValues.metadata);
+      if (schema && Object.keys(existingMetadata).length > 0) {
+        fieldValues = {
+          ...fieldValues,
+          ...metadataToFormValues(schema, existingMetadata),
+        };
+      }
+
+      // Legacy multilingual titles ({en: …}) → plain string for the input.
+      const title = titleToFormValue(fieldValues.title);
+      if (title !== fieldValues.title) {
+        fieldValues = { ...fieldValues, title };
+      }
+    } catch {
+      // Type catalog unavailable — form falls back to free-text + JSON.
+    }
+  });
+
   // ── Field definitions per form type ───────────────────────────────────
+
+  /** Dynamic, type-specific metadata fields for the selected doi_type. */
+  function metadataFields() {
+    const selected = fieldValues.doi_type || "";
+    const schema = typeSchemas[selected];
+    if (!schema || schema.length === 0) {
+      return [{
+        name: "metadata",
+        label: "Metadata (JSON)",
+        type: "json",
+        required: false,
+        help: "Type-specific metadata as JSON (advanced). Pick a DOI type above for a guided form.",
+      }];
+    }
+    return schema.map((f) => ({
+      name: `meta_${f.name}`,
+      schemaName: f.name,
+      label: formatKey(f.name),
+      type: f.types.includes("list")
+        ? "meta-list"
+        : f.types.includes("int")
+          ? "meta-int"
+          : "meta-str",
+      required: false,
+      help: f.description || "",
+    }));
+  }
+
   /** @returns {{ name: string, label: string, type: string, required: boolean, help?: string }[]} */
   function getFields() {
     switch (formType) {
       case "doi-assign":
         return [
-          { name: "url", label: "Target URL", type: "url", required: true, help: "The URL this DOI should resolve to" },
-          { name: "title", label: "Title (JSON)", type: "json", required: false, help: '{\"en\": \"...\", \"fr\": \"...\"}' },
-          { name: "doi_type", label: "DOI Type", type: "text", required: false, help: "external, internal, book, webpage, etc." },
-          { name: "metadata", label: "Metadata (JSON)", type: "json", required: false, help: "Type-specific metadata as JSON" },
+          { name: "url", label: "Target URL", type: "url", required: true, help: "The URL this DOI should resolve to (leave empty for entity DOIs)" },
+          { name: "title", label: "Title", type: "text", required: false, help: "Human-readable title" },
+          { name: "doi_type", label: "DOI Type", type: "autocomplete", required: false, help: "Select or type a type (book, film, person, …)", options: typeOptions },
+          ...metadataFields(),
         ];
       case "doi-modify":
         return [
           { name: "doi", label: "DOI", type: "text", required: true, help: "The DOI to modify" },
           { name: "url", label: "New URL", type: "url", required: false, help: "Leave blank to keep current" },
-          { name: "title", label: "Title (JSON)", type: "json", required: false, help: '{\"en\": \"...\"} or leave blank' },
-          { name: "doi_type", label: "DOI Type", type: "text", required: false, help: "Leave blank to keep current" },
-          { name: "metadata", label: "Metadata (JSON)", type: "json", required: false },
+          { name: "title", label: "Title", type: "text", required: false, help: "Leave blank to keep current" },
+          { name: "doi_type", label: "DOI Type", type: "autocomplete", required: false, help: "Leave blank to keep current", options: typeOptions },
+          ...metadataFields(),
         ];
       case "auth-key-create":
         return [
@@ -87,9 +160,21 @@
     }
   }
 
+  /** Extract dynamic metadata field values keyed by schema field name. */
+  function metadataFieldValues() {
+    const out = {};
+    for (const f of fields) {
+      if (f.schemaName && fieldValues[`meta_${f.schemaName}`] !== undefined) {
+        out[f.schemaName] = fieldValues[`meta_${f.schemaName}`];
+      }
+    }
+    return out;
+  }
+
   function buildFlags() {
     const flags = {};
     for (const f of fields) {
+      if (f.schemaName) continue; // dynamic metadata assembled below
       const val = fieldValues[f.name];
       if (val !== undefined && val !== null && val !== "") {
         if (f.type === "json") {
@@ -105,7 +190,39 @@
         }
       }
     }
+    // Multilingual titles: a language map when translations exist.
+    if (isDoiForm && fieldValues.title !== undefined && titleTranslations.length > 0) {
+      const title = buildTitle(fieldValues.title, titleTranslations);
+      if (typeof title === "object") {
+        flags.title = JSON.stringify(title);
+      }
+    }
+    // Assemble type-specific metadata from the dynamic fields.
+    const selectedType = fieldValues.doi_type || "";
+    const schema = typeSchemas[selectedType];
+    if (schema && schema.length > 0) {
+      const metadata = fieldsToMetadata(schema, metadataFieldValues());
+      if (Object.keys(metadata).length > 0) {
+        flags.metadata = JSON.stringify(metadata);
+      }
+    }
     return flags;
+  }
+
+  // ── Multilingual title editing ────────────────────────────────────────
+  let isDoiForm = $derived(formType === "doi-assign" || formType === "doi-modify");
+
+  function addTitleTranslation() {
+    titleTranslations = [...titleTranslations, { lang: "", title: "" }];
+  }
+
+  function updateTitleTranslation(index, field, value) {
+    const next = titleTranslations.map((t, i) => (i === index ? { ...t, [field]: value } : t));
+    titleTranslations = next;
+  }
+
+  function removeTitleTranslation(index) {
+    titleTranslations = titleTranslations.filter((_, i) => i !== index);
   }
 
   async function handleSubmit(e) {
@@ -183,6 +300,15 @@
   }
 
   function setField(name, value) {
+    if (name === "doi_type") {
+      // Drop stale dynamic metadata fields when the type changes.
+      const cleaned = {};
+      for (const k of Object.keys(fieldValues)) {
+        if (!k.startsWith("meta_")) cleaned[k] = fieldValues[k];
+      }
+      fieldValues = { ...cleaned, [name]: value };
+      return;
+    }
     fieldValues = { ...fieldValues, [name]: value };
   }
 
@@ -232,6 +358,30 @@
               <option value={opt}>{opt}</option>
             {/each}
           </select>
+        {:else if field.type === "autocomplete"}
+          <input
+            id={field.name}
+            type="text"
+            class="field-input"
+            value={fieldValues[field.name] || ""}
+            oninput={(e) => setField(field.name, e.target.value)}
+            placeholder={field.help || ""}
+            list={field.name + "-options"}
+          />
+          <datalist id={field.name + "-options"}>
+            {#each field.options || [] as opt}
+              <option value={opt}></option>
+            {/each}
+          </datalist>
+        {:else if field.type === "meta-list"}
+          <textarea
+            id={field.name}
+            class="field-input field-textarea"
+            value={fieldValues[field.name] || ""}
+            oninput={(e) => setField(field.name, e.target.value)}
+            placeholder="One person per line: DOI (10.ronzz/…) or 'Given Family'"
+            rows="3"
+          ></textarea>
         {:else if field.type === "json"}
           <textarea
             id={field.name}
@@ -262,6 +412,51 @@
         {/if}
       </div>
     {/each}
+
+    {#if isDoiForm}
+      <div class="form-field">
+        <button
+          type="button"
+          class="i18n-toggle"
+          onclick={() => { titleI18nOpen = !titleI18nOpen; }}
+        >
+          🌐 {titleI18nOpen ? "Hide" : "Add"} translations (multilingual title)
+        </button>
+        {#if titleI18nOpen}
+          <div class="i18n-rows">
+            {#each titleTranslations as t, i (i)}
+              <div class="i18n-row">
+                <input
+                  type="text"
+                  class="field-input i18n-lang"
+                  value={t.lang}
+                  oninput={(e) => updateTitleTranslation(i, "lang", e.target.value)}
+                  placeholder="lang (fr, de, …)"
+                />
+                <input
+                  type="text"
+                  class="field-input i18n-text"
+                  value={t.title}
+                  oninput={(e) => updateTitleTranslation(i, "title", e.target.value)}
+                  placeholder="Translated title"
+                />
+                <button
+                  type="button"
+                  class="i18n-remove"
+                  aria-label="Remove translation"
+                  onclick={() => removeTitleTranslation(i)}
+                >✕</button>
+              </div>
+            {/each}
+            <button type="button" class="btn-small" onclick={addTitleTranslation}>+ Add language</button>
+            <p class="field-help">
+              The primary title is stored as <code>en</code>; translations
+              above add other languages (e.g. <code>fr</code>, <code>de</code>).
+            </p>
+          </div>
+        {/if}
+      </div>
+    {/if}
 
     <div class="form-actions">
       <button type="submit" class="btn-submit" disabled={submitting}>
@@ -370,6 +565,57 @@
     display: flex;
     gap: 0.5rem;
     padding-top: 0.5rem;
+  }
+  .i18n-toggle {
+    background: none;
+    border: 1px dashed #4a4a6a;
+    color: #7c9ad4;
+    padding: 0.3rem 0.6rem;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.78rem;
+    cursor: pointer;
+    text-align: left;
+  }
+  .i18n-toggle:hover {
+    border-color: #7c9ad4;
+    background: #1e1e3a;
+  }
+  .i18n-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-top: 0.4rem;
+  }
+  .i18n-row {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+  }
+  .i18n-lang {
+    width: 8rem;
+    flex-shrink: 0;
+  }
+  .i18n-text {
+    flex: 1;
+    min-width: 0;
+  }
+  .i18n-remove {
+    background: none;
+    border: none;
+    color: #7c7c9a;
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .i18n-remove:hover {
+    color: #f77;
+    background: #3a1e1e;
+  }
+  .i18n-rows .btn-small {
+    align-self: flex-start;
   }
   .btn-submit {
     padding: 0.5rem 1rem;

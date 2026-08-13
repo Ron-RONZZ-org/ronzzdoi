@@ -125,6 +125,14 @@ cd web && npm install && npm run dev
 
 Open `http://127.0.0.1:6025` in your browser, paste your API key, then type `!help`, `!doi search`, etc.
 
+The GUI's **Assign DOI** form offers a type dropdown (autocomplete),
+type-specific metadata fields, and optional multilingual titles (an
+"Add translations" section; the primary title is stored under `en`);
+the **DOI detail** view renders metadata as a readable table (with a
+"Copy JSON" button) and the **Copy DOI** button copies a
+browser-resolvable URL (`<instance>/10.ronzz/<suffix>`) rather than the
+bare identifier.
+
 ### Use the CLI against production
 
 The public API is exposed at `https://doi-api.ronzz.org` (behind Cloudflare,
@@ -193,11 +201,12 @@ ronzzdoi-dev
 cd web && npm run dev
 
 # Terminal 3: run smoke test
+export RONZZDOI_API_KEY="la_..."   # admin key from the ronzzdoi-dev --seed output
 CHROME_PATH=$(npx playwright install --list 2>/dev/null | grep chromium | head -1 | awk '{print $2}') \
   node tests/e2e_gui_smoke.mjs
 ```
 
-The E2E test opens the GUI in headless Chromium, types `!help`, `!doi assign`, `!doi search`, `!citation show`, asserts tabs open with content, and fails on any JS console error.
+The E2E test opens the GUI in headless Chromium, types `!help`, `!doi assign`, `!doi search`, `!citation show`, asserts tabs open with content, and fails on any JS console error. Command-based tests require an authenticated session, so the admin key from `ronzzdoi-dev --seed` must be passed via `RONZZDOI_API_KEY`; when set, the suite additionally verifies the assign-form type dropdown, the human-friendly metadata table, citation loading without auth errors, and resolvable DOI copy URLs.
 
 ## Development
 

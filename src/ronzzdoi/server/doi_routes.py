@@ -98,22 +98,64 @@ def _get_doi_svc() -> DOIService:
     return _doi_svc
 
 
-def _record_to_response(record: dict[str, Any], include_status: bool = False) -> dict[str, Any]:
-    """Convert a DOI service record dict to an API response dict."""
+def _record_to_response(
+    record: dict[str, Any],
+    include_status: bool = False,
+    base_url: str | None = None,
+) -> dict[str, Any]:
+    """Convert a DOI service record dict to an API response dict.
+
+    Args:
+        record: Raw record dict from the DOI service.
+        include_status: If True, include ``status`` and ``redirect_history``.
+        base_url: Request base URL (e.g. ``str(request.base_url)``).  When
+            provided, a browser-resolvable ``resolve_url`` is added.
+    """
+    title = record.get("title", "")
+    # Multilingual titles are stored as JSON text — deserialize to a dict
+    # for API consumers (idempotent for plain strings and dicts).
+    if isinstance(title, str):
+        try:
+            parsed = json.loads(title)
+            if isinstance(parsed, dict):
+                title = parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
     result = {
         "doi": record["doi"],
         "target_url": record.get("target_url"),
-        "title": record.get("title", ""),
+        "title": title,
         "doi_type": record.get("doi_type", "external"),
         "metadata": record.get("metadata", json.loads(record.get("metadata_json", "{}"))),
         "created_at": record["created_at"],
         "updated_at": record["updated_at"],
         "deleted_at": record.get("deleted_at"),
     }
+    if base_url:
+        result["resolve_url"] = f"{base_url.rstrip('/')}/{record['doi']}"
     if include_status:
         result["status"] = record.get("status", "active")
         result["redirect_history"] = record.get("redirect_history", [])
     return result
+
+
+def _inject_resolve_url(data: Any, base_url: str) -> Any:
+    """Recursively add ``resolve_url`` to any dict that has a ``doi`` key.
+
+    Used by the command endpoint so that command-driven GUI tabs
+    (e.g. ``!doi resolve``) receive the same resolvable URL as REST
+    responses.  Mutates and returns *data*.
+    """
+    if isinstance(data, dict):
+        doi = data.get("doi")
+        if isinstance(doi, str) and "resolve_url" not in data:
+            data["resolve_url"] = f"{base_url.rstrip('/')}/{doi}"
+        for value in data.values():
+            _inject_resolve_url(value, base_url)
+    elif isinstance(data, list):
+        for item in data:
+            _inject_resolve_url(item, base_url)
+    return data
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -132,6 +174,7 @@ class DOIMergeRequest(BaseModel):
 @router.post("/api/v1/doi/merge")
 async def merge_dois(
     body: DOIMergeRequest,
+    request: Request,
     user: dict[str, Any] = Depends(require_permission("edit")),
 ) -> dict[str, Any]:
     """Merge a source DOI into a target DOI.
@@ -151,11 +194,12 @@ async def merge_dois(
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=str(exc))
     except DOIAmbiguousError as exc:
         raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail=str(exc))
-    return _record_to_response(result, include_status=True)
+    return _record_to_response(result, include_status=True, base_url=str(request.base_url))
 
 
 @router.get("/api/v1/doi")
 async def list_dois(
+    request: Request,
     doi_type: str = "",
     include_deleted: bool = False,
     limit: int = 20,
@@ -170,16 +214,47 @@ async def list_dois(
     results = svc.list_dois(limit=limit, offset=offset, include_deleted=include_deleted)
     if doi_type:
         results = [r for r in results if r.get("doi_type") == doi_type]
+    base_url = str(request.base_url)
     return {
-        "items": [_record_to_response(r) for r in results],
+        "items": [_record_to_response(r, base_url=base_url) for r in results],
         "total": len(results),
         "limit": limit,
         "offset": offset,
     }
 
 
+@router.get("/api/v1/doi/types")
+async def doi_types(
+    user: dict[str, Any] = Depends(require_permission("read_only")),
+) -> dict[str, Any]:
+    """Return the supported DOI types and their metadata field schemas.
+
+    Used by the GUI assign/modify form to render a type dropdown
+    (autocomplete) and type-specific metadata inputs.  The citation
+    module's ``DOC_TYPE_SCHEMAS`` is the source of truth.
+    """
+    from ronzzdoi.citation.schemas import DOC_TYPES, DOC_TYPE_SCHEMAS, ENTITY_TYPES
+
+    return {
+        "types": ["external", *DOC_TYPES, *ENTITY_TYPES],
+        "schemas": {
+            name: [
+                {
+                    "name": field_name,
+                    "required": field_def.required,
+                    "types": [t.__name__ for t in field_def.types],
+                    "description": field_def.description,
+                }
+                for field_name, field_def in schema.items()
+            ]
+            for name, schema in DOC_TYPE_SCHEMAS.items()
+        },
+    }
+
+
 @router.get("/api/v1/doi/search")
 async def search_dois(
+    request: Request,
     q: str = "",
     doi_type: str = "",
     limit: int = 20,
@@ -192,12 +267,13 @@ async def search_dois(
     Falls back to basic listing.
     """
     svc = _get_doi_svc()
+    base_url = str(request.base_url)
 
     if not q.strip():
         results = svc.list_dois(limit=limit, offset=offset)
         if doi_type:
             results = [r for r in results if r.get("doi_type") == doi_type]
-        return {"items": [_record_to_response(r) for r in results], "total": len(results), "limit": limit, "offset": offset}
+        return {"items": [_record_to_response(r, base_url=base_url) for r in results], "total": len(results), "limit": limit, "offset": offset}
 
     if _search_svc is not None:
         results = _search_svc.search_fts(q, limit=limit)
@@ -207,7 +283,7 @@ async def search_dois(
     if doi_type:
         results = [r for r in results if r.get("doi_type") == doi_type][:limit]
 
-    return {"items": [_record_to_response(r) for r in results], "total": len(results), "limit": limit, "offset": offset}
+    return {"items": [_record_to_response(r, base_url=base_url) for r in results], "total": len(results), "limit": limit, "offset": offset}
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -218,6 +294,7 @@ async def search_dois(
 @router.post("/api/v1/doi", status_code=201)
 async def assign_doi(
     body: DOIAssignRequest,
+    request: Request,
     user: dict[str, Any] = Depends(require_permission("edit")),
 ) -> dict[str, Any]:
     """Assign a new ronzzDOI."""
@@ -233,12 +310,13 @@ async def assign_doi(
         raise HTTPException(status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     except DOIExistsError as exc:
         raise HTTPException(status_code=HTTP_409_CONFLICT, detail=str(exc))
-    return _record_to_response(result)
+    return _record_to_response(result, base_url=str(request.base_url))
 
 
 @router.get("/api/v1/doi/{doi:path}")
 async def resolve_doi(
     doi: str,
+    request: Request,
     include_redirects: bool = True,
     user: dict[str, Any] = Depends(require_permission("read_only")),
 ) -> dict[str, Any]:
@@ -256,13 +334,14 @@ async def resolve_doi(
     if record is None:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=f"DOI '{doi}' not found.")
 
-    return _record_to_response(record, include_status=True)
+    return _record_to_response(record, include_status=True, base_url=str(request.base_url))
 
 
 @router.put("/api/v1/doi/{doi:path}")
 async def modify_doi(
     doi: str,
     body: DOIModifyRequest,
+    request: Request,
     user: dict[str, Any] = Depends(require_permission("edit")),
 ) -> dict[str, Any]:
     """Modify an existing DOI record."""
@@ -281,7 +360,7 @@ async def modify_doi(
     except DOIAmbiguousError as exc:
         raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail=str(exc))
 
-    return _record_to_response(result, include_status=True)
+    return _record_to_response(result, include_status=True, base_url=str(request.base_url))
 
 
 @router.delete("/api/v1/doi/{doi:path}", status_code=204)

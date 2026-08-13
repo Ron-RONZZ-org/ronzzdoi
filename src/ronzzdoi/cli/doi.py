@@ -22,6 +22,17 @@ def _normalize_doi(doi: str) -> str:
     return doi
 
 
+def _display_title(title: Any) -> str:
+    """Render a title for the terminal.
+
+    Multilingual titles are language maps (``{"en": "...", "fr": "..."}``);
+    display the primary language (``en``, falling back to the first entry).
+    """
+    if isinstance(title, dict):
+        return str(title.get("en") or next(iter(title.values()), ""))
+    return str(title) if title is not None else ""
+
+
 def register_subparser(subparsers: argparse._SubParsersAction) -> None:
     """Register the ``doi`` subcommand tree."""
     doi_parser = subparsers.add_parser(
@@ -122,7 +133,7 @@ def _cmd_assign(args: argparse.Namespace, client: RonzzdoiClient) -> None:
     print(f"DOI assigned: {result.get('doi', '?')}")
     print(f"  URL:   {result.get('target_url', '(none)')}")
     print(f"  Type:  {result.get('doi_type', '?')}")
-    print(f"  Title: {result.get('title', '')}")
+    print(f"  Title: {_display_title(result.get('title'))}")
 
 
 def _cmd_resolve(args: argparse.Namespace, client: RonzzdoiClient) -> None:
@@ -136,7 +147,7 @@ def _cmd_resolve(args: argparse.Namespace, client: RonzzdoiClient) -> None:
 
     print(f"DOI:       {result.get('doi', '?')}")
     print(f"URL:       {result.get('target_url', '(none)')}")
-    print(f"Title:     {result.get('title', '')}")
+    print(f"Title:     {_display_title(result.get('title'))}")
     print(f"Type:      {result.get('doi_type', '?')}")
     print(f"Status:    {result.get('status', '?')}")
     print(f"Created:   {result.get('created_at', '?')}")
@@ -179,7 +190,7 @@ def _cmd_modify(args: argparse.Namespace, client: RonzzdoiClient) -> None:
 
     print(f"DOI modified: {result.get('doi', '?')}")
     print(f"  URL:   {result.get('target_url', '(none)')}")
-    print(f"  Title: {result.get('title', '')}")
+    print(f"  Title: {_display_title(result.get('title'))}")
     print(f"  Type:  {result.get('doi_type', '?')}")
 
 
@@ -216,7 +227,7 @@ def _cmd_list(args: argparse.Namespace, client: RonzzdoiClient) -> None:
         print(
             f"{item.get('doi', '?'):<45} "
             f"{item.get('doi_type', '?'):<20} "
-            f"{item.get('title', ''):<40} "
+            f"{_display_title(item.get('title')):<40} "
             f"{status:<10}"
         )
     print(f"\nTotal: {result.get('total', len(items))}")
@@ -276,7 +287,7 @@ def _cmd_merge(args: argparse.Namespace, client: RonzzdoiClient) -> None:
 
     print(f"Merge complete. Target DOI: {result.get('doi', '?')}")
     print(f"  URL:   {result.get('target_url', '(none)')}")
-    print(f"  Title: {result.get('title', '')}")
+    print(f"  Title: {_display_title(result.get('title'))}")
     print(f"  Type:  {result.get('doi_type', '?')}")
 
 
@@ -284,6 +295,6 @@ def _print_doi_brief(record: dict[str, Any]) -> None:
     """Print a brief summary of a DOI record."""
     print(f"  DOI:       {record.get('doi', '?')}")
     print(f"  URL:       {record.get('target_url', '(none)')}")
-    print(f"  Title:     {record.get('title', '')}")
+    print(f"  Title:     {_display_title(record.get('title'))}")
     print(f"  Type:      {record.get('doi_type', '?')}")
     print(f"  Status:    {record.get('status', '?')}")

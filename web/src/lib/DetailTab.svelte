@@ -18,6 +18,8 @@
   import { banner } from "@lightercore/ui/bannerStore.svelte.js";
   import { createCopyState } from "@lightercore/ui/listTabSelection.svelte.js";
   import ConfirmDialog from "@lightercore/ui/ConfirmDialog.svelte";
+  import { citationApi } from "./api.js";
+  import { flattenValue, formatKey } from "./formatValue.js";
 
   let { data = {}, tabId } = $props();
   let d = $derived(data || {});
@@ -60,12 +62,14 @@
   );
 
   // ── Metadata entries (from metadata_json) ─────────────────────
-  let metadataEntries = $derived.by(() => {
-    const meta = d.metadata_json || d.metadata || {};
+  // Flattened to human-friendly leaf rows — no raw JSON in the table.
+  let metadataRows = $derived.by(() => {
+    let meta = d.metadata_json !== undefined ? d.metadata_json : d.metadata;
     if (typeof meta === "string") {
-      try { return Object.entries(JSON.parse(meta)); } catch { return []; }
+      try { meta = JSON.parse(meta); } catch { return []; }
     }
-    return Object.entries(meta || {});
+    if (!meta || typeof meta !== "object" || Array.isArray(meta)) return [];
+    return flattenValue(meta).map((row, i) => ({ ...row, id: i }));
   });
 
   // ── Technical info fields (shown in collapsible section) ──────
@@ -96,14 +100,11 @@
   async function fetchStyles() {
     if (!d.doi) return;
     try {
-      const resp = await fetch(`/api/v1/citation?doi=${encodeURIComponent(d.doi)}`);
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data.styles && data.styles.length > 0) {
-          availableStyles = data.styles;
-          if (!availableStyles.includes(citationStyle)) {
-            citationStyle = availableStyles[0];
-          }
+      const data = await citationApi.styles(d.doi);
+      if (data.styles && data.styles.length > 0) {
+        availableStyles = data.styles;
+        if (!availableStyles.includes(citationStyle)) {
+          citationStyle = availableStyles[0];
         }
       }
     } catch {
@@ -117,19 +118,10 @@
     citationLoading = true;
     citationError = "";
     try {
-      const resp = await fetch(
-        `/api/v1/citation?doi=${encodeURIComponent(d.doi)}&style=${encodeURIComponent(citationStyle)}`,
-      );
-      if (resp.ok) {
-        const data = await resp.json();
-        citationText = data.citation || "";
-      } else {
-        const err = await resp.json().catch(() => ({}));
-        citationError = err.detail || "Failed to load citation";
-        citationText = "";
-      }
+      const data = await citationApi.show(d.doi, citationStyle);
+      citationText = data.citation || "";
     } catch (err) {
-      citationError = err.message || "Network error";
+      citationError = err.message || "Failed to load citation";
       citationText = "";
     } finally {
       citationLoading = false;
@@ -166,11 +158,33 @@
     }, { idKey: "form-doi-assign" });
   }
 
+  /** Browser-resolvable URL for this DOI (issue #38). */
+  function doiResolveUrl() {
+    return d.resolve_url || `${window.location.origin}/${d.doi}`;
+  }
+
   function copyDoi() {
     if (d.doi) {
-      navigator.clipboard.writeText(d.doi).catch(() => {});
-      banner.show("DOI copied: " + d.doi, "success");
+      const url = doiResolveUrl();
+      navigator.clipboard.writeText(url).catch(() => {});
+      banner.show("Resolution URL copied: " + url, "success");
     }
+  }
+
+  /** Copy the full DOI record as JSON (issue #37). */
+  function copyJson() {
+    const payload = JSON.stringify({
+      doi: d.doi,
+      doi_type: d.doi_type,
+      title: d.title || "",
+      target_url: d.target_url || "",
+      metadata: (d.metadata_json !== undefined ? d.metadata_json : d.metadata) || {},
+      created_at: d.created_at,
+      updated_at: d.updated_at,
+      ...(d.deleted_at ? { deleted_at: d.deleted_at } : {}),
+    }, null, 2);
+    navigator.clipboard.writeText(payload).catch(() => {});
+    banner.show("DOI data copied as JSON", "success");
   }
 
   function openUrl() {
@@ -181,6 +195,7 @@
 
   function openModifyForm() {
     if (d.doi) {
+      const metadata = d.metadata_json !== undefined ? d.metadata_json : d.metadata;
       tabStore.open("form", "Modify DOI: " + d.doi, {
         form: "doi-modify",
         initialData: {
@@ -188,7 +203,7 @@
           url: d.target_url || "",
           title: typeof d.title === "string" ? d.title : JSON.stringify(d.title || {}),
           doi_type: d.doi_type || "",
-          metadata: d.metadata_json ? JSON.stringify(d.metadata_json, null, 2) : "{}",
+          metadata: metadata || {},
         },
       }, { idKey: `form-doi-modify-${d.doi}` });
     }
@@ -297,7 +312,8 @@
   <div class="toolbar">
     <button class="btn-small" onclick={handleNew} title="Assign new DOI (n)">+ New</button>
     {#if d.doi}
-      <button class="btn-small" onclick={copyDoi} title="Copy DOI to clipboard">📋 Copy DOI</button>
+      <button class="btn-small" onclick={copyDoi} title="Copy resolvable DOI URL to clipboard">📋 Copy DOI</button>
+      <button class="btn-small" onclick={copyJson} title="Copy this DOI record as JSON">📋 JSON</button>
     {/if}
     {#if d.target_url}
       <button class="btn-small" onclick={openUrl} title="Open target URL in new tab">🔗 Open URL</button>
@@ -334,21 +350,19 @@
   </div>
 
   <!-- ════════ Metadata (human-relevant fields first) ════════ -->
-  {#if metadataEntries.length > 0}
+  {#if metadataRows.length > 0}
     <details class="section" open>
       <summary class="section-title">Metadata</summary>
       <table class="detail-table metadata-table">
         <tbody>
-          {#each metadataEntries as [key, value]}
+          {#each metadataRows as row (row.id)}
             <tr>
-              <td class="dt-key">{key}</td>
-              <td class="dt-value">
-                {#if typeof value === "object"}
-                  <pre class="json-pre">{JSON.stringify(value, null, 2)}</pre>
-                {:else}
-                  {String(value)}
-                {/if}
-              </td>
+              <td
+                class="dt-key"
+                style="padding-left: {0.25 + row.depth * 1.15}rem"
+                title={row.path}
+              >{formatKey(row.path)}</td>
+              <td class="dt-value">{row.value === "" ? "—" : String(row.value)}</td>
             </tr>
           {/each}
         </tbody>
@@ -398,7 +412,14 @@
     <table class="detail-table">
       <tbody>
         {#each techFields as field}
-          {#if field.key === "Target URL" || field.key === "URL"}
+          {#if field.key === "DOI"}
+            <tr>
+              <td class="dt-key">DOI</td>
+              <td class="dt-value">
+                <a href={doiResolveUrl()} target="_blank" rel="noopener noreferrer" class="url-link" title="Open resolvable DOI URL">{field.value}</a>
+              </td>
+            </tr>
+          {:else if field.key === "Target URL" || field.key === "URL"}
             <tr>
               <td class="dt-key">{field.key}</td>
               <td class="dt-value">
@@ -650,16 +671,6 @@
 
   .metadata-table {
     margin-bottom: 0;
-  }
-  .json-pre {
-    background: #222;
-    padding: 0.3rem 0.5rem;
-    border-radius: 3px;
-    font-size: 0.75rem;
-    color: #c8c8e8;
-    overflow-x: auto;
-    max-width: 500px;
-    white-space: pre-wrap;
   }
 
   /* ── Citation section ─────────────────────────── */

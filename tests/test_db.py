@@ -13,6 +13,62 @@ from ronzzdoi.db.schema import MIGRATIONS
 from ronzzdoi.db.service import DOIService, RedirectService
 
 
+# ── Lightersearch stub ──────────────────────────────────────────────────
+#
+# The lightersearch wiring tests below mock lightersearch functions, but
+# ``mocker.patch`` needs the target module importable.  lightersearch is
+# an optional dependency (the ``semantic`` extra), so when it is not
+# installed we inject lightweight stub modules that let the mock-based
+# tests run everywhere — they never exercise a real sqlite-vec/fastembed
+# stack.  If the real package is importable, it is used as-is.
+
+
+def _ensure_lightersearch_importable() -> None:
+    """Make ``lightersearch`` importable for mock-based wiring tests."""
+    import sys
+    import types
+
+    try:
+        import lightersearch  # noqa: F401 — prefer the real package
+    except ModuleNotFoundError:
+        pass
+    else:
+        return
+
+    def _noop(*args, **kwargs):
+        return None
+
+    def _available(*args, **kwargs):
+        return False
+
+    pkg = types.ModuleType("lightersearch")
+    pkg.__path__ = []
+    sys.modules["lightersearch"] = pkg
+
+    vec = types.ModuleType("lightersearch.vec")
+    vec.load = _noop
+    vec.available = _available
+    vec.ensure_vec_table = _noop
+    vec.insert_vector = _noop
+    vec.delete_vector = _noop
+    pkg.vec = vec
+    sys.modules["lightersearch.vec"] = vec
+
+    embed = types.ModuleType("lightersearch.embed")
+    embed.embed_single = _noop
+    embed.vector_to_bytes = _noop
+    pkg.embed = embed
+    sys.modules["lightersearch.embed"] = embed
+
+    search = types.ModuleType("lightersearch.search")
+    search.search_dois = _noop
+    pkg.search = search
+    sys.modules["lightersearch.search"] = search
+
+
+_ensure_lightersearch_importable()
+
+
 # ── Fixtures ──────────────────────────────────────────────────────────
 
 
@@ -316,7 +372,9 @@ class TestLightersearchWiring:
         # Now enable vec and set up mocks for the sync call
         svc._vec_available = True
         mock_embed = mocker.patch("lightersearch.embed.embed_single")
-        mock_embed.return_value = __import__("numpy").array([0.1] * 384, dtype="float32")
+        # Plain list stand-in — vector_to_bytes is mocked below, so the
+        # embedding value itself never matters (avoids a numpy dependency).
+        mock_embed.return_value = [0.1] * 384
 
         mock_to_bytes = mocker.patch("lightersearch.embed.vector_to_bytes")
         mock_to_bytes.return_value = b"fakevec"
@@ -511,7 +569,9 @@ class TestInitDB:
         mocker.patch("ronzzdoi.db.ensure_dirs")
         mocker.patch("ronzzdoi.db.set_app_name")
 
-        # Ensure _after_connect runs (lightersearch is installed in this env)
+        # Ensure _after_connect runs; vec_dois exists only when a real
+        # sqlite-vec extension is available (stubbed as unavailable
+        # when lightersearch is not installed).
         from ronzzdoi.db import init_db
 
         db, doi_svc, red_svc = init_db("test_ronzzdoi_vec")

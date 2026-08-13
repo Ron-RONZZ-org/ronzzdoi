@@ -30,7 +30,13 @@ class DOIAssignRequest(BaseModel):
         default="external",
         description="Free-text type descriptor. Citation doc_types (book, webpage, circulaire) or entity types (person, abstract_entity, country).",
     )
-    title: str = Field(default="", description="Human-readable title of the resource")
+    title: str | dict[str, str] = Field(
+        default="",
+        description=(
+            "Human-readable title. Either a plain string or a language map "
+            "(e.g. {'en': 'Inception', 'fr': 'Inception'}) for multilingual titles."
+        ),
+    )
     metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Type-specific fields per doc_type (see citation.schemas.DOC_TYPE_SCHEMAS).",
@@ -47,7 +53,7 @@ class DOIModifyRequest(BaseModel):
         default=None,
         description="New target URL (triggers soft redirect if changed)",
     )
-    title: str | None = None
+    title: str | dict[str, str] | None = None
     doi_type: str | None = None
     metadata: dict[str, Any] | None = None
     redirect_note: str = Field(
@@ -60,13 +66,22 @@ class DOIResponse(BaseModel):
     """Response model representing a DOI record.
 
     ``metadata`` is deserialized from the database ``metadata_json`` column.
+    ``title`` is either a plain string or a language map (multilingual titles
+    are stored as JSON text and deserialized here).
     """
 
     doi: str
     target_url: str | None = None
-    title: str = ""
+    title: str | dict[str, str] = ""
     doi_type: str = "external"
     metadata: dict[str, Any] = Field(default_factory=dict)
+    resolve_url: str | None = Field(
+        default=None,
+        description=(
+            "Browser-resolvable URL for this DOI (instance base URL + "
+            "canonical DOI). Typing it in a browser redirects to the target."
+        ),
+    )
     created_at: str
     updated_at: str
     deleted_at: str | None = None
