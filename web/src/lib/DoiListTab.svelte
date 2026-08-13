@@ -14,6 +14,7 @@
   } from "@lightercore/ui/listTabSelection.svelte.js";
   import ConfirmDialog from "@lightercore/ui/ConfirmDialog.svelte";
   import { deriveIdKey } from "./commandExecutor.js";
+  import { resolveUrl } from "./api.js";
 
   let { data: _data = {}, tabId } = $props();
 
@@ -468,11 +469,11 @@
             title="Copy resolvable DOI URL"
             onclick={(e) => {
               e.stopPropagation();
-              const url = item.resolve_url || `${window.location.origin}/${doi}`;
+              const url = item.resolve_url || resolveUrl(item.doi);
               uuidCopy.copyToClipboard(url);
             }}
           >
-            {#if uuidCopy.copiedKey === (item.resolve_url || `${window.location.origin}/${doi}`)}
+            {#if uuidCopy.copiedKey === (item.resolve_url || resolveUrl(item.doi))}
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
             {:else}
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="10" y="10" width="11" height="11" rx="1.5" opacity="0.5"/><rect x="5" y="4" width="11" height="11" rx="1.5"/></svg>
