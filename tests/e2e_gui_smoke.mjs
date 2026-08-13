@@ -17,6 +17,7 @@ import { strict as assert } from "assert";
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://127.0.0.1:6025";
 const CHROME_PATH = process.env.CHROME_PATH || "chromium";
+const API_KEY = process.env.RONZZDOI_API_KEY || "";
 
 // ── Shared state ──────────────────────────────────────────────────────────
 
@@ -33,6 +34,19 @@ async function sleep(ms) {
 }
 
 async function typeCommand(cmd) {
+  // Ensure the home tab is active (Alt+1) with the input focused and
+  // cleared — stale focus/input state from previous tabs can otherwise
+  // leave the input hidden or with leftover text.
+  await page.keyboard.press("Alt+1");
+  await sleep(100);
+  await page.evaluate(() => {
+    const el = document.querySelector(".input-field");
+    if (el) {
+      el.focus();
+      el.value = "";
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  });
   const input = page.locator(".input-field, [aria-label='Message input'], textarea");
   await input.waitFor({ state: "visible", timeout: 5000 });
   await input.click();
@@ -50,6 +64,14 @@ async function pressEnter() {
 async function getActiveTabTitleAttr() {
   const tabBar = page.locator('[role="tablist"]');
   await tabBar.waitFor({ state: "visible", timeout: 4000 });
+
+  // Wait for the transient "Executing…" loading tab to be replaced by the
+  // real response tab (command latency varies).
+  await page.waitForFunction(() => {
+    const active = document.querySelector('[role="tab"][aria-selected="true"]');
+    return active && active.getAttribute("title") !== "Executing…";
+  }, { timeout: 8000 }).catch(() => {});
+
   const activeTab = tabBar.locator('[role="tab"][aria-selected="true"]');
   await activeTab.waitFor({ state: "visible", timeout: 3000 });
   return (await activeTab.getAttribute("title") || "").trim();
@@ -82,6 +104,9 @@ async function assertHomeActive() {
 }
 
 async function dismissAllTabs() {
+  // Drop focus first — with the input focused, Escape is consumed by
+  // ChatInput (closes suggestions / blurs) instead of closing tabs.
+  await page.locator("body").click({ position: { x: 4, y: 4 } }).catch(() => {});
   await page.keyboard.press("Alt+1");
   await sleep(150);
   for (let i = 0; i < 10; i++) {
@@ -109,6 +134,16 @@ async function dismissAllTabs() {
     if (!tabBarVisible) break;
     const tabCount = await tabBar.locator('[role="tab"]').count().catch(() => 0);
     if (tabCount <= 1) break;
+  }
+
+  // Fallback: force-close any remaining tabs via their close buttons
+  // (Escape can be consumed by focused elements inside tab panels).
+  for (let i = 0; i < 10; i++) {
+    const closeBtns = page.locator(".tab-close");
+    const n = await closeBtns.count().catch(() => 0);
+    if (n === 0) break;
+    await closeBtns.first().click().catch(() => {});
+    await sleep(120);
   }
 }
 
@@ -142,7 +177,10 @@ async function runWithBrowser(fn) {
       executablePath: CHROME_PATH,
       args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"],
     });
-    const context = await browser.newContext({ viewport: { width: 960, height: 720 } });
+    const context = await browser.newContext({
+      viewport: { width: 960, height: 720 },
+      permissions: ["clipboard-read", "clipboard-write"],
+    });
     page = await context.newPage();
 
     page.on("pageerror", (err) => {
@@ -159,6 +197,13 @@ async function runWithBrowser(fn) {
     await page.goto(FRONTEND_URL, { waitUntil: "networkidle" });
     console.log("\u2713 Page loaded:", await page.title());
     await sleep(500);
+
+    // Seed the API key (if provided) so authenticated commands work
+    if (API_KEY) {
+      await page.evaluate((k) => localStorage.setItem("ronzzdoi_api_key", k), API_KEY);
+      await page.reload({ waitUntil: "networkidle" });
+      await sleep(400);
+    }
 
     // Dismiss any welcome notice
     try {
@@ -251,6 +296,69 @@ async function runTests() {
     await typeCommand("!doi search test");
     await pressEnter();
     await assertTabOpened("DOI");
+  });
+
+  // ═══════════════════════════════════════════
+  // SNIPPETS — form toggle + copy embed
+  // ═══════════════════════════════════════════
+  console.log("\n--- SNIPPETS ---");
+
+  await test("!snippet assign (incomplete) opens form with Text/Code/Math toggle", async () => {
+    await typeCommand("!snippet assign");
+    await pressEnter();
+    await assertTabOpened("Assign");
+
+    const toggle = page.locator('[role="radiogroup"][aria-label="Content Type"]');
+    await toggle.waitFor({ state: "visible", timeout: 3000 });
+    const buttons = await toggle.locator('button[role="radio"]').allTextContents();
+    assert(buttons.length === 3, `Expected 3 content-kind options, got ${buttons.length}`);
+    const kinds = buttons.map((b) => b.trim());
+    assert(kinds.includes("text") && kinds.includes("code") && kinds.includes("math"),
+      `Toggle should offer text/code/math, got: ${kinds.join(", ")}`);
+  });
+
+  await test("!snippet assign form submits → snippet tab with Copy Embed", async () => {
+    await typeCommand("!snippet assign");
+    await pressEnter();
+    await assertTabOpened("Assign");
+
+    // Text is the default kind — fill content + title
+    const content = page.locator("#content");
+    await content.fill("Cogito ergo sum.");
+    const title = page.locator("#title");
+    await title.fill("Descartes quote");
+    await page.locator('button[type="submit"]').click();
+    await sleep(900);
+
+    // Snippet tab opens (title starts with "Snippet:")
+    await assertTabOpened("Snippet");
+
+    const copyBtn = page.locator(".copy-btn");
+    await copyBtn.waitFor({ state: "visible", timeout: 3000 });
+    assert((await copyBtn.textContent() || "").includes("Copy Embed"),
+      "Copy Embed button should be present on the snippet tab");
+  });
+
+  await test("Copy Embed copies an iframe tag to the clipboard", async () => {
+    // Self-contained: create a fresh snippet tab, then copy from it
+    await typeCommand("!snippet assign");
+    await pressEnter();
+    await assertTabOpened("Assign");
+
+    await page.locator("#content").fill("Cogito ergo sum.");
+    await page.locator("#title").fill("Descartes quote");
+    await page.locator('button[type="submit"]').click();
+    await sleep(900);
+    await assertTabOpened("Snippet");
+
+    const copyBtn = page.locator(".copy-btn");
+    await copyBtn.waitFor({ state: "visible", timeout: 3000 });
+    await copyBtn.click();
+    await sleep(300);
+
+    const clip = await page.evaluate(() => navigator.clipboard.readText());
+    assert(clip.startsWith('<iframe src="'), `Clipboard should hold an iframe tag, got: ${clip.slice(0, 60)}`);
+    assert(clip.includes("/embed/10.ronzz/"), "iframe src should point at the embed page");
   });
 
   // ═══════════════════════════════════════════

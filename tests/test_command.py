@@ -12,25 +12,29 @@ from ronzzdoi.server.command.models import CommandRequest
 from ronzzdoi.server.command.registry import (
     CommandAmbiguousError,
     CommandNotFoundError,
-    _handlers,
     _descriptions,
-    _tree_cache,
+    _handlers,
     command,
     dispatch,
     get_command_tree,
     register_module,
 )
 
-
 # ── Helpers ─────────────────────────────────────────────────────────────
 
 
 def _clean_registry() -> None:
-    """Clear all registered handlers (for test isolation)."""
+    """Clear all registered handlers and the tree cache.
+
+    NOTE: ``_tree_cache`` must be reset through the registry module —
+    rebinding an imported name only shadows it in this module and never
+    touches the real cache.
+    """
     _handlers.clear()
     _descriptions.clear()
-    global _tree_cache
-    _tree_cache = None
+    import ronzzdoi.server.command.registry as _registry
+
+    _registry._tree_cache = None
 
 
 _MOCK_USER = {"id": "test-user-001", "role": "user", "auth_method": "api_key"}
@@ -41,10 +45,23 @@ _MOCK_USER = {"id": "test-user-001", "role": "user", "auth_method": "api_key"}
 
 @pytest.fixture(autouse=True)
 def reset_registry() -> None:
-    """Reset the registry before and after each test."""
+    """Reset the registry before and after each test.
+
+    Snapshot the handlers registered at import time (the real ``!doi``,
+    ``!snippet``, ``!auth``, … handlers) and restore them afterwards, so
+    this module's isolation never leaves the shared registry empty for
+    later test modules that dispatch real commands.
+    """
+    snapshot = (_handlers.copy(), _descriptions.copy())
     _clean_registry()
     yield
-    _clean_registry()
+    _handlers.clear()
+    _handlers.update(snapshot[0])
+    _descriptions.clear()
+    _descriptions.update(snapshot[1])
+    import ronzzdoi.server.command.registry as _registry
+
+    _registry._tree_cache = None
 
 
 # ── Test: @command decorator ────────────────────────────────────────────
@@ -101,10 +118,18 @@ class TestRegisterModule:
     """``register_module()`` registers handlers from a dict."""
 
     def test_basic(self) -> None:
-        register_module({
-            "mod.a": (lambda f, p, u=None: {"type": "detail", "title": "A", "data": {}}, "Module A"),
-            "mod.b": (lambda f, p, u=None: {"type": "detail", "title": "B", "data": {}}, "Module B"),
-        })
+        register_module(
+            {
+                "mod.a": (
+                    lambda f, p, u=None: {"type": "detail", "title": "A", "data": {}},
+                    "Module A",
+                ),
+                "mod.b": (
+                    lambda f, p, u=None: {"type": "detail", "title": "B", "data": {}},
+                    "Module B",
+                ),
+            }
+        )
         assert "mod.a" in _handlers
         assert "mod.b" in _handlers
         assert _descriptions.get("mod.a") == "Module A"
@@ -130,7 +155,11 @@ class TestDispatch:
 
         @command("doi.resolve", description="Resolve a DOI")
         def _resolve(flags, positionals, user=None):  # type: ignore
-            return {"type": "detail", "title": "Resolved", "data": {"doi": positionals[0]}}
+            return {
+                "type": "detail",
+                "title": "Resolved",
+                "data": {"doi": positionals[0]},
+            }
 
         result = dispatch(["doi", "resolve", "10.ronzz/abc123"], {}, _MOCK_USER)
         assert result["data"]["doi"] == "10.ronzz/abc123"
@@ -146,7 +175,9 @@ class TestDispatch:
                 "data": {"source": positionals[0], "target": positionals[1]},
             }
 
-        result = dispatch(["doi", "merge", "10.ronzz/src", "10.ronzz/tgt"], {}, _MOCK_USER)
+        result = dispatch(
+            ["doi", "merge", "10.ronzz/src", "10.ronzz/tgt"], {}, _MOCK_USER
+        )
         assert result["data"]["source"] == "10.ronzz/src"
         assert result["data"]["target"] == "10.ronzz/tgt"
 
@@ -155,7 +186,11 @@ class TestDispatch:
 
         @command("doi.list", description="List DOIs")
         def _list(flags, positionals, user=None):  # type: ignore
-            return {"type": "list", "title": "DOIs", "data": {"pos_len": len(positionals)}}
+            return {
+                "type": "list",
+                "title": "DOIs",
+                "data": {"pos_len": len(positionals)},
+            }
 
         result = dispatch(["doi", "list"], {}, _MOCK_USER)
         assert result["data"]["pos_len"] == 0
@@ -165,7 +200,11 @@ class TestDispatch:
 
         @command("test.whoami", description="Who am I")
         def _whoami(flags, positionals, user=None):  # type: ignore
-            return {"type": "detail", "title": "User", "data": {"id": user["id"] if user else None}}
+            return {
+                "type": "detail",
+                "title": "User",
+                "data": {"id": user["id"] if user else None},
+            }
 
         result = dispatch(["test", "whoami"], {}, _MOCK_USER)
         assert result["data"]["id"] == "test-user-001"
@@ -180,7 +219,9 @@ class TestDispatch:
             return {"type": "detail", "title": "Flags", "data": flags}
 
         result = dispatch(
-            ["test", "flags"], {"include-expired": "", "limit": "10"}, _MOCK_USER,
+            ["test", "flags"],
+            {"include-expired": "", "limit": "10"},
+            _MOCK_USER,
         )
         assert result["data"] == {"include-expired": "", "limit": "10"}
 
@@ -259,6 +300,7 @@ class TestCommandTree:
 
     def test_cache(self) -> None:
         """Tree is cached and rebuilt on new registration."""
+
         @command("first.cmd", description="First")
         def _f(flags, positionals, user=None):  # type: ignore
             pass

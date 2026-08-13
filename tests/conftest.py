@@ -6,17 +6,66 @@ Uses the **key-only** auth schema (no users table, no passwords).
 from __future__ import annotations
 
 import secrets
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from lighterauth.api_key import generate_api_key
 from lighterauth.keyonly import init_keyonly_schema
 from lighterauth.middleware import Lighterauth
 from lightercore.db import LighterDB
+
+# ── Optional-dependency stub ────────────────────────────────────────────
+
+
+@pytest.fixture(autouse=True, scope="session")
+def lightersearch_stub() -> None:
+    """Provide an importable ``lightersearch`` stub when it is not installed.
+
+    The lightersearch-wiring tests (``tests/test_db.py::TestLightersearchWiring``)
+    mock every ``lightersearch.*`` symbol — they only need the package to be
+    *importable*, not the real sqlite-vec/fastembed/onnxruntime stack.
+
+    When the real package IS installed (e.g. with the ``semantic`` extra),
+    this fixture is a no-op.
+
+    Stub defaults:
+    - ``vec.available(db) -> False`` — vec disabled, matching an env
+      without sqlite-vec.
+    - ``vec.insert_vector/delete_vector/ensure_vec_table/load`` — no-ops.
+    - ``embed.embed_single/vector_to_bytes`` — inert.
+    - ``search.search_dois`` — returns an empty list.
+    """
+    import sys
+    import types
+
+    try:
+        import lightersearch  # noqa: F401
+    except ModuleNotFoundError:
+        vec = types.ModuleType("lightersearch.vec")
+        vec.available = lambda db: False
+        vec.insert_vector = lambda db, rowid, vector: None
+        vec.delete_vector = lambda db, rowid: None
+        vec.ensure_vec_table = lambda db: None
+        vec.load = lambda conn: None
+
+        embed = types.ModuleType("lightersearch.embed")
+        embed.embed_single = lambda text: None
+        embed.vector_to_bytes = lambda vector: b""
+
+        search = types.ModuleType("lightersearch.search")
+        search.search_dois = lambda db, query, limit=20: []
+
+        pkg = types.ModuleType("lightersearch")
+        pkg.__path__ = []
+        sys.modules["lightersearch"] = pkg
+        sys.modules["lightersearch.vec"] = vec
+        sys.modules["lightersearch.embed"] = embed
+        sys.modules["lightersearch.search"] = search
+    yield
 
 
 # ── Database fixtures ──────────────────────────────────────────────────
@@ -70,7 +119,16 @@ def admin_api_key_edit(auth_db: LighterDB) -> str:
         "INSERT INTO api_keys (id, name, key, prefix, permission, owner, "
         "created_at, updated_at) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (key_id, "test-edit-access", hashed_key, prefix, "edit", "test-editor", now, now),
+        (
+            key_id,
+            "test-edit-access",
+            hashed_key,
+            prefix,
+            "edit",
+            "test-editor",
+            now,
+            now,
+        ),
     )
     return raw_key
 
@@ -88,7 +146,16 @@ def admin_api_key_readonly(auth_db: LighterDB) -> str:
         "INSERT INTO api_keys (id, name, key, prefix, permission, owner, "
         "created_at, updated_at) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (key_id, "test-read-only", hashed_key, prefix, "read_only", "test-reader", now, now),
+        (
+            key_id,
+            "test-read-only",
+            hashed_key,
+            prefix,
+            "read_only",
+            "test-reader",
+            now,
+            now,
+        ),
     )
     return raw_key
 
@@ -250,7 +317,6 @@ def doi_app(
     from ronzzdoi.server.citation_routes import mount_citation_routes
     from ronzzdoi.server.command_routes import mount_command_routes
     from ronzzdoi.server.doi_routes import mount_doi_routes
-    from ronzzdoi.server.search_routes import mount_search_routes
 
     auth = Lighterauth(auth_db, keyonly=True)
     init_auth_deps(auth)
