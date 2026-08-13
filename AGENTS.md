@@ -343,6 +343,30 @@ Push to `main` → `.github/workflows/deploy.yml` → SSH as `ubuntu` → `git p
 Deploy key stored as GitHub secret `DEPLOY_SSH_KEY` (shared with
 ronzzdoi-public-web).
 
+### CI (GitHub Actions)
+
+`.github/workflows/ci.yml` runs on every push/PR:
+
+| Job | Command | Scope |
+|-----|---------|-------|
+| `lint` | `uvx ruff check .` + `uvx ruff format --check .` | whole repo must be ruff-clean |
+| `test` | `uv run --no-sync pytest tests/ -q` | backend (needs sibling `../lightercore`, `../lighterauth` cloned beside the checkout) |
+| `frontend` | `npm ci` + `npm run test` + `npm run build` | vitest + production build (needs `../lightercore` for `@lightercore/ui`) |
+| `e2e` | Playwright against seeded dev servers | on `main` pushes only (not PRs), needs `RONZZDOI_API_KEY` captured from `ronzzdoi-dev --seed` |
+
+The E2E job starts `ronzzdoi-dev --data-dir /tmp/ronzzdoi-ci --seed` +
+`npm run dev`, captures the seeded admin key from the backend log, and runs
+`tests/e2e_gui_smoke.mjs`. Logs are uploaded as an artifact on failure.
+
+### Ruff hooks in git worktrees
+
+The lefthook `pre-commit` ruff hooks route through `scripts/lint.sh`, NOT
+`uv run ruff`: `uv run` cannot resolve the sibling dependencies
+(`../lighterauth`, `../lightercore`) inside a git worktree, where those
+relative paths do not exist. `lint.sh` mirrors `smart-test.sh`'s worktree
+detection (`git rev-parse --git-common-dir`) and runs the main checkout's
+`.venv/bin/ruff` directly.
+
 ### nginx + DNS
 
 - `doi.ronzz.org:80` → `127.0.0.1:4321` (ronzzdoi-public-web)
