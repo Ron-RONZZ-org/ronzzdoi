@@ -152,3 +152,17 @@ fragments:
   governed by CSP instead).
 
 The embed data comes from `GET /public/v1/snippet/{doi}`.
+
+## Production Access
+
+Snippets are created against the **write** API, `https://doi-admin.ronzz.org`
+(key-protected, see root AGENTS.md → Deployment):
+
+```bash
+export RONZZDOI_SERVER=https://doi-admin.ronzz.org
+export RONZZDOI_API_KEY=<admin key>
+ronzzdoi snippet assign --type code --content "print('hi')" --language python
+```
+
+The resulting DOI is served publicly without a key:
+`https://doi.ronzz.org/embed/10.ronzz/<suffix>`.

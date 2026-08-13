@@ -43,6 +43,21 @@ dois (doi PK, target_url, title, doi_type, metadata_json, created_at, updated_at
   └── redirects (redirect_id PK, doi FK→dois, old_url, note, created_at)
 ```
 
+## Schema (v2 — embeddable snippets)
+
+```
+snippets (doi PK FK→dois, content_kind CHECK IN ('text','code','math'),
+          content, language, source_doi FK→dois, page_start, page_end,
+          created_at, updated_at, deleted_at)
+snippets_fts — FTS5 external content on snippets, synced via triggers
+```
+
+- Snippet content lives **outside** `metadata_json` (separate from citation data).
+- `dois_fts` indexes DOI metadata; `snippets_fts` indexes snippet content.
+  `DBDOIService._search_fts()` merges both for unified search (snippet hits
+  carry `content_kind`).
+- Both tables are tombstoned together by `SnippetService.delete()`.
+
 ## Adding a Migration
 
 ```python

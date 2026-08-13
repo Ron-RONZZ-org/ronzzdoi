@@ -45,6 +45,13 @@ The citation data lives in the DOI record's `metadata_json` column. The `doi_typ
 
 Only these 3 styles are implemented. The CLI previously offered mla/chicago/bibtex — those were removed in v0.1.0 to match server capability.
 
+## Snippet Guard
+
+`CitationFormatter.format()` explicitly rejects `doi_type='snippet'` records
+with a `ValueError` — snippets are embeddable content (see
+`docs/AGENTS-snippet.md`), not citable documents, and must never produce a
+citation.
+
 ## Resolution Cache
 
 Person/entity DOIs (`person_doi`, `issuing_authority_doi`, `book_doi`) are resolved via `DOIService.resolve()` and cached in a per-`format()` call dict to avoid N+1 lookups.

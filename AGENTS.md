@@ -128,7 +128,7 @@ ronzzdoi/
 │       ├── auth/                # Key-only auth wiring (lighterauth wrapper)
 │       └── scripts/             # ronzzdoi-dev and ronzzdoi-server entry points
 ├── tests/                       # Test suite (pytest)
-│   ├── conftest.py              # Shared fixtures (key-only auth)
+│   ├── conftest.py              # Shared fixtures (key-only auth) + lightersearch stub
 │   ├── test_doi_service.py      # DOI service unit tests
 │   ├── test_citation.py         # Citation formatting tests
 │   ├── test_doi_routes.py       # DOI API endpoint tests
@@ -136,10 +136,12 @@ ronzzdoi/
 │   ├── test_auth_routes.py      # Auth API endpoint tests
 │   ├── test_auth_middleware.py  # Auth middleware tests
 │   ├── test_auth_integration.py # End-to-end server tests
-│   ├── test_cli_*.py            # CLI command tests
+│   ├── test_cli_*.py            # CLI command tests (doi, citation, search, snippet)
 │   ├── test_command.py          # Command dispatch tests
 │   ├── test_handlers.py         # Handler unit tests (check_permission)
-│   ├── test_db.py               # DB module tests
+│   ├── test_db.py               # DB module + schema tests
+│   ├── test_snippet_service.py  # Snippet service + unified search tests
+│   ├── test_snippet_routes.py   # Snippet API endpoint tests
 │   └── e2e_gui_smoke.mjs        # Playwright E2E smoke test
 └── web/                         # Svelte 5 SPA frontend
     └── src/
@@ -148,9 +150,10 @@ ronzzdoi/
         │   ├── ChatInput.svelte # Command input box
         │   ├── HomeTab.svelte   # Home tab with !xxx dispatch
         │   ├── TabView.svelte   # Tab-based result display
-        │   ├── FormTab.svelte   # Interactive form rendering
+        │   ├── FormTab.svelte   # Interactive form rendering (Text/Code/Math toggle)
         │   ├── DetailTab.svelte # Detail view for DOI records
         │   ├── ListTab.svelte   # List view for search results
+        │   ├── SnippetTab.svelte# Snippet view with Copy Embed button
         │   ├── api.js           # Auth-bearing fetch() wrapper
         │   └── command*.js      # Command engine, parser, executor
         └── App.svelte
@@ -168,6 +171,20 @@ ronzzdoi/
 6. **SQLite in WAL mode.** Use `pragma journal_mode=wal` on connection.
 7. **Error messages include actionable suggestions.**
 8. **Async where it matters.** FastAPI routes are async; CLI commands can be sync.
+
+---
+
+## Documentation Standards
+
+- **Every module must have a corresponding `docs/AGENTS-<module>.md` file**
+  (DOI, Snippet, Citation, DB). Server/Auth/CLI are documented inline in this file.
+- **CLI help text must include concrete examples** for every subcommand.
+- **Options with restricted values MUST document all valid values.**
+  Example: `ronzzdoi snippet assign --type {text,code,math}`.
+- **After any structural or UI change, update** this file, the relevant
+  `docs/AGENTS-*.md`, and `README.md` in the same commit.
+- **README must make production access explicit** — the CLI (`RONZZDOI_SERVER`
+  + `RONZZDOI_API_KEY`) and GUI (`RONZZDOI_API_URL`) paths to the prod APIs.
 
 ---
 
@@ -264,9 +281,24 @@ PYTHONPATH=src /path/to/main/checkout/.venv/bin/python -m pytest tests/...
 
 | Suite | Count | File |
 |-------|-------|------|
-| Backend pytest | 422 | All `tests/test_*.py` |
+| Backend pytest | 435 | All `tests/test_*.py` |
 | Frontend vitest | 19 | `web/src/lib/__tests__/*.test.js` |
 | E2E Playwright | 1 suite | `tests/e2e_gui_smoke.mjs` |
+
+### E2E GUI smoke test invocation
+
+Requires both servers running (backend + `cd web && npm run dev`) and a
+Playwright chromium binary:
+
+```bash
+CHROME_PATH=<chromium binary> \
+RONZZDOI_API_KEY=<admin key from ronzzdoi-dev --seed> \
+FRONTEND_URL=http://127.0.0.1:6025 \
+node tests/e2e_gui_smoke.mjs
+```
+
+Without `RONZZDOI_API_KEY` the authenticated flows (citation, assign form,
+snippet Copy Embed) are skipped.
 
 ---
 
@@ -304,7 +336,8 @@ Commands:
 ### Auto-deploy (GitHub Actions)
 
 Push to `main` → `.github/workflows/deploy.yml` → SSH as `ubuntu` → `git pull` →
-`uv sync --extra public` → `systemctl restart ronzzdoi`.
+`uv sync --extra public` → `systemctl restart ronzzdoi ronzzdoi-internal`
+(both the public and internal services are restarted on every deploy).
 
 Deploy key stored as GitHub secret `DEPLOY_SSH_KEY` (shared with
 ronzzdoi-public-web).

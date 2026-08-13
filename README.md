@@ -215,7 +215,7 @@ admin to request a key with the appropriate permission level.
 ### Backend unit + integration tests
 
 ```bash
-# Run all tests (413 backend tests)
+# Run all tests (435 backend tests)
 uv run pytest tests/ -v
 
 # Run a specific test file

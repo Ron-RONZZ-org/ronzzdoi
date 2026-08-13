@@ -62,6 +62,22 @@ src/ronzzdoi/doi/
 | `DOIInvalidError` | `DOIError` | DOI format validation fails |
 | `DOIAmbiguousError` | `DOIError` | Prefix matches multiple records |
 
+## Server Response Layer (`server/doi_routes.py`)
+
+`_record_to_response()` adds API-consumer conveniences on top of the
+service records:
+
+- **`resolve_url`** — when called with `base_url` (from `request.base_url`),
+  a browser-resolvable URL `{base}/{doi}` is included (used by the GUI to
+  link result tabs to the public web).
+- **Multilingual titles** — a `title` stored as JSON text (`{"en": "…",
+  "fr": "…"}`) is deserialized to a dict in API responses (idempotent for
+  plain strings).
+- **`content_kind`** — passed through on unified-search hits so the GUI can
+  render snippet results distinctly.
+- `GET /api/v1/doi/schemas` — serves the citation doc-type field schemas
+  (`DOC_TYPE_SCHEMAS`) to drive the GUI's guided assign form.
+
 ## Dependencies
 
 - **Requires**: `lightercore` (LighterDB, CRUDService)
