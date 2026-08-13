@@ -1,7 +1,7 @@
 <script>
-  /** Snippet tab — renders snippet content with a Copy Embed action.
+  /** Snippet tab — renders snippet content with Edit/Delete/Copy Embed actions.
    *
-   * Data shape (from the `!snippet resolve` / `!snippet assign` handlers):
+   * Data shape (from the `!snippet view` / `!snippet add` handlers):
    *   { doi, title, content_kind, content, language, source_doi,
    *     page_start, page_end, status }
    *
@@ -9,9 +9,12 @@
    * key `ronzzdoi_embed_base` (default: https://doi.ronzz.org/embed).
    */
 
+  import { tabStore } from "@lightercore/ui/tabStore.svelte.js";
+  import { banner } from "@lightercore/ui/bannerStore.svelte.js";
+  import ConfirmDialog from "@lightercore/ui/ConfirmDialog.svelte";
   import { buildEmbedHtml, embedUrlFor } from "./embed.js";
 
-  let { data = {} } = $props();
+  let { data = {}, tabId } = $props();
 
   const doi = $derived(data.doi || "");
   const title = $derived(data.title || "");
@@ -22,6 +25,7 @@
   const pageStart = $derived(data.page_start || "");
   const pageEnd = $derived(data.page_end || "");
   const status = $derived(data.status || "active");
+  const isTombstone = $derived(status === "tombstone");
 
   const embedUrl = $derived(embedUrlFor(doi));
   const iframeHtml = $derived(buildEmbedHtml(doi, title));
@@ -36,6 +40,65 @@
     } catch {
       // Clipboard may be unavailable (e.g. non-secure context) — show the tag instead
       copied = false;
+    }
+  }
+
+  /** Open the edit form prefilled with this snippet's content. */
+  function openEdit() {
+    if (!doi || isTombstone) return;
+    tabStore.open("form", "Edit Snippet: " + doi, {
+      form: "snippet-edit",
+      initialData: {
+        doi,
+        type: contentKind,
+        content,
+        title,
+        language,
+        source_doi: sourceDoi || "",
+        page_start: pageStart,
+        page_end: pageEnd,
+      },
+    }, { idKey: `form-snippet-edit-${doi}` });
+  }
+
+  // ── Delete (tombstone) ────────────────────────────────────────────
+  let confirmDelete = $state(false);
+
+  function requestDelete() {
+    if (!doi) return;
+    confirmDelete = true;
+  }
+
+  function cancelDelete() {
+    confirmDelete = false;
+  }
+
+  async function executeDelete() {
+    confirmDelete = false;
+    if (!doi) return;
+    const apiKey = localStorage.getItem("ronzzdoi_api_key") || "";
+    try {
+      const resp = await fetch("/api/v1/command", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+        },
+        body: JSON.stringify({
+          tokens: ["snippet", "delete", doi],
+          flags: {},
+          raw_input: `!snippet delete ${doi}`,
+        }),
+      });
+      const result = await resp.json();
+      if (result.type === "error") {
+        banner.show(result.data?.message || "Delete failed", "error", 5000);
+      } else {
+        banner.show("Snippet tombstoned: " + doi, "success");
+        if (tabId) tabStore.close(tabId);
+      }
+    } catch (err) {
+      banner.show("Error: " + err.message, "error", 5000);
     }
   }
 </script>
@@ -75,12 +138,28 @@
   </div>
 
   <div class="snippet-actions">
+    {#if doi && !isTombstone}
+      <button class="edit-btn" onclick={openEdit} title="Edit this snippet">
+        ✏ Edit
+      </button>
+      <button class="delete-btn" onclick={requestDelete} title="Tombstone this snippet">
+        🗑 Delete
+      </button>
+    {/if}
     <button class="copy-btn" onclick={copyEmbed} disabled={!doi}>
       {copied ? "Copied!" : "Copy Embed"}
     </button>
     <span class="embed-url" title={embedUrl}>{embedUrl}</span>
   </div>
 </div>
+
+{#if confirmDelete}
+  <ConfirmDialog
+    message={`Tombstone snippet "${doi}"? This action cannot be undone.`}
+    onSubmit={executeDelete}
+    onDismiss={cancelDelete}
+  />
+{/if}
 
 <style>
   .snippet-tab {
@@ -177,6 +256,30 @@
   }
   .copy-btn:hover { background: #3a6a4a; }
   .copy-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .edit-btn {
+    padding: 0.4rem 0.9rem;
+    background: #2a3a4a;
+    border: 1px solid #3a5a7a;
+    border-radius: 4px;
+    color: #8fb0db;
+    font-family: monospace;
+    font-size: 0.82rem;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .edit-btn:hover { background: #3a5a6a; }
+  .delete-btn {
+    padding: 0.4rem 0.9rem;
+    background: #3a2a2a;
+    border: 1px solid #7a3a3a;
+    border-radius: 4px;
+    color: #db8f8f;
+    font-family: monospace;
+    font-size: 0.82rem;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .delete-btn:hover { background: #5a3a3a; }
   .embed-url {
     font-family: monospace;
     font-size: 0.72rem;

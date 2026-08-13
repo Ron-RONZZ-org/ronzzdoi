@@ -181,7 +181,7 @@ ronzzdoi/
   (DOI, Snippet, Citation, DB). Server/Auth/CLI are documented inline in this file.
 - **CLI help text must include concrete examples** for every subcommand.
 - **Options with restricted values MUST document all valid values.**
-  Example: `ronzzdoi snippet assign --type {text,code,math}`.
+  Example: `ronzzdoi snippet add --type {text,code,math}`.
 - **After any structural or UI change, update** this file, the relevant
   `docs/AGENTS-*.md`, and `README.md` in the same commit.
 - **README must make production access explicit** — the CLI (`RONZZDOI_SERVER`
@@ -282,8 +282,8 @@ PYTHONPATH=src /path/to/main/checkout/.venv/bin/python -m pytest tests/...
 
 | Suite | Count | File |
 |-------|-------|------|
-| Backend pytest | 435 | All `tests/test_*.py` |
-| Frontend vitest | 57 | `web/src/lib/__tests__/*.test.js` |
+| Backend pytest | 448 | All `tests/test_*.py` |
+| Frontend vitest | 62 | `web/src/lib/__tests__/*.test.js` |
 | E2E Playwright | 1 suite | `tests/e2e_gui_smoke.mjs` |
 
 ### E2E GUI smoke test invocation

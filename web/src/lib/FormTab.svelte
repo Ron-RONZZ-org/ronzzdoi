@@ -101,6 +101,29 @@
     }));
   }
 
+  /**
+   * Shared snippet form fields (used by snippet-add and snippet-edit).
+   * The Text/Code/Math toggle switches which fields are shown.
+   */
+  function snippetFields() {
+    const kind = fieldValues.type || "text";
+    const fields = [
+      { name: "type", label: "Content Type", type: "segmented", required: true, options: ["text", "code", "math"], help: "Text quotation, code snippet, or KaTeX math" },
+      { name: "content", label: "Content", type: "textarea", required: true, help: kind === "code" ? "Paste the code snippet" : kind === "math" ? "KaTeX math source (e.g. \\frac{a}{b})" : "The quotation text" },
+      { name: "title", label: "Title", type: "text", required: false, help: "Short human-readable title (optional)" },
+    ];
+    if (kind === "code") {
+      fields.push({ name: "language", label: "Language", type: "text", required: false, help: "python, javascript, bash, …" });
+    } else if (kind === "text") {
+      fields.push(
+        { name: "source_doi", label: "Source DOI", type: "text", required: false, help: "The book/document DOI this quote is from (optional)" },
+        { name: "page_start", label: "Page Start", type: "text", required: false },
+        { name: "page_end", label: "Page End", type: "text", required: false },
+      );
+    }
+    return fields;
+  }
+
   /** @returns {{ name: string, label: string, type: string, required: boolean, help?: string, options?: string[] }[]} */
   function getFields() {
     switch (formType) {
@@ -119,25 +142,14 @@
           { name: "doi_type", label: "DOI Type", type: "autocomplete", required: false, help: "Leave blank to keep current", options: typeOptions },
           ...metadataFields(),
         ];
-      case "snippet-assign": {
-        // Text/Code/Math toggle switches which fields are shown.
-        const kind = fieldValues.type || "text";
-        const fields = [
-          { name: "type", label: "Content Type", type: "segmented", required: true, options: ["text", "code", "math"], help: "Text quotation, code snippet, or KaTeX math" },
-          { name: "content", label: "Content", type: "textarea", required: true, help: kind === "code" ? "Paste the code snippet" : kind === "math" ? "KaTeX math source (e.g. \\frac{a}{b})" : "The quotation text" },
-          { name: "title", label: "Title", type: "text", required: false, help: "Short human-readable title (optional)" },
+      case "snippet-add":
+        return snippetFields();
+      case "snippet-edit":
+        // Edit reuses the assign fields, prefilled, plus a read-only DOI.
+        return [
+          { name: "doi", label: "DOI", type: "text", required: true, readonly: true, help: "The snippet DOI (read-only)" },
+          ...snippetFields(),
         ];
-        if (kind === "code") {
-          fields.push({ name: "language", label: "Language", type: "text", required: false, help: "python, javascript, bash, …" });
-        } else if (kind === "text") {
-          fields.push(
-            { name: "source_doi", label: "Source DOI", type: "text", required: false, help: "The book/document DOI this quote is from (optional)" },
-            { name: "page_start", label: "Page Start", type: "text", required: false },
-            { name: "page_end", label: "Page End", type: "text", required: false },
-          );
-        }
-        return fields;
-      }
       case "auth-key-create":
         return [
           { name: "name", label: "Key Name", type: "text", required: true },
@@ -168,8 +180,10 @@
         return ["doi", "assign"];
       case "doi-modify":
         return ["doi", "modify"];
-      case "snippet-assign":
-        return ["snippet", "assign"];
+      case "snippet-add":
+        return ["snippet", "add"];
+      case "snippet-edit":
+        return ["snippet", "modify"];
       case "auth-key-create":
         return ["auth", "api_key", "create"];
       case "auth-key-update":
@@ -336,7 +350,8 @@
   let displayTitle = $derived(
     formType === "doi-assign" ? "Assign DOI"
       : formType === "doi-modify" ? "Modify DOI"
-      : formType === "snippet-assign" ? "Assign Snippet"
+      : formType === "snippet-add" ? "Add Snippet"
+      : formType === "snippet-edit" ? "Edit Snippet"
       : formType === "auth-key-create" ? "Create API Key"
       : formType === "auth-key-update" ? "Update API Key"
       : formType === "auth-key-delete" ? "Delete API Key"
@@ -456,6 +471,7 @@
             value={fieldValues[field.name] || ""}
             oninput={(e) => setField(field.name, e.target.value)}
             placeholder={field.help || ""}
+            disabled={field.readonly}
           />
         {/if}
       </div>
@@ -602,6 +618,11 @@
     transition: border-color 0.15s;
   }
   .field-input:focus { border-color: #5a5a8a; }
+  .field-input:disabled {
+    opacity: 0.6;
+    background: #12182a;
+    cursor: not-allowed;
+  }
   .field-textarea {
     resize: vertical;
     min-height: 80px;

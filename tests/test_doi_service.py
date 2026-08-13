@@ -404,6 +404,49 @@ class TestList:
         assert results[1]["doi"] == r2["doi"]
         assert results[2]["doi"] == r1["doi"]
 
+    def test_list_doi_type_filter(self, svc, db):
+        """list_dois with doi_type restricts the returned records."""
+        from ronzzdoi.snippet.service import SnippetService
+
+        db.execute(
+            "CREATE TABLE snippets ("
+            " doi TEXT PRIMARY KEY REFERENCES dois(doi) ON DELETE CASCADE,"
+            " content_kind TEXT NOT NULL, content TEXT NOT NULL,"
+            " language TEXT DEFAULT '', source_doi TEXT,"
+            " page_start TEXT DEFAULT '', page_end TEXT DEFAULT '',"
+            " created_at TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT)"
+        )
+        snippet_svc = SnippetService(db, svc)
+        svc.assign("https://a.com", doi_type="book")
+        svc.assign("https://b.com", doi_type="book")
+        snippet_svc.assign("text", "quote one")
+        snippet_svc.assign("code", "print(1)")
+
+        books = svc.list_dois(doi_type="book")
+        assert len(books) == 2
+        snippets = svc.list_dois(doi_type="snippet")
+        assert len(snippets) == 2
+        assert all(r["doi_type"] == "snippet" for r in snippets)
+
+    def test_list_doi_type_filter_combined_with_deleted(self, svc, db):
+        """doi_type filter composes with the default deleted_at exclusion."""
+        from ronzzdoi.snippet.service import SnippetService
+
+        db.execute(
+            "CREATE TABLE snippets ("
+            " doi TEXT PRIMARY KEY REFERENCES dois(doi) ON DELETE CASCADE,"
+            " content_kind TEXT NOT NULL, content TEXT NOT NULL,"
+            " language TEXT DEFAULT '', source_doi TEXT,"
+            " page_start TEXT DEFAULT '', page_end TEXT DEFAULT '',"
+            " created_at TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT)"
+        )
+        snippet_svc = SnippetService(db, svc)
+        svc.assign("https://a.com", doi_type="book")
+        snip = snippet_svc.assign("text", "quote one")
+        snippet_svc.delete(snip["doi"])
+        results = svc.list_dois(doi_type="snippet")
+        assert results == []
+
     def test_list_limit(self, svc):
         """list_dois respects limit parameter."""
         for i in range(10):

@@ -89,15 +89,17 @@ non-snippet DOIs. Citation formatting of snippet DOIs returns a 400
 ## CLI
 
 ```
-ronzzdoi snippet assign --type {text,code,math} --content "..." \
+ronzzdoi snippet add --type {text,code,math} --content "..." \
     [--title ... --language ... --source-doi ... --page-start ... --page-end ...]
-ronzzdoi snippet resolve <doi>
-ronzzdoi snippet modify <doi> [--content ... --type ... --source-doi ...]
-ronzzdoi snippet delete <doi>
+ronzzdoi snippet view <doi-or-link>
+ronzzdoi snippet modify <doi-or-link> [--content ... --type ... --source-doi ...]
+ronzzdoi snippet delete <doi-or-link>
 ronzzdoi snippet embed <doi> [--width 640 --height 240] [--url-only] [--base URL]
 ```
 
 `--type` selects the content kind (mirrors the GUI toggle).
+`add` and `view` accept a full resolvable link
+(`https://doi.ronzz.org/10.ronzz/<suffix>`) or a bare DOI.
 `embed` prints a copy-paste `<iframe>` tag pointing at the public-web
 embed page (`https://doi.ronzz.org/embed/<doi>` by default, overridable
 via `--base` or the `RONZZDOI_EMBED_BASE` env var).  `--url-only`
@@ -105,19 +107,35 @@ prints just the embed URL for JS-based embeds.
 
 ## GUI
 
-`!snippet assign` opens a form (`FormTab` case `snippet-assign`) with a
+`!snippet add` opens a form (`FormTab` case `snippet-add`) with a
 **segmented Text/Code/Math toggle** that conditionally shows:
 
 - `code` → language field
 - `text` → source DOI + page start/end fields
 
-`!snippet assign` and `!snippet resolve` return the `snippet` tab type,
-rendered by `SnippetTab.svelte` with a **Copy Embed** button that copies
-the iframe tag to the clipboard.  The embed base URL can be overridden
-for development via `localStorage["ronzzdoi_embed_base"]`.
+`!snippet search [query]` opens the **snippet list tab**
+(`snippet-list` type, rendered by `DoiListTab` in snippet mode): rows
+carry a content-kind badge, support selection + batch tombstone, and
+clicking a row opens the snippet view tab.
 
-The command tree is backend-driven — `!snippet resolve|modify|delete` get
-autocomplete automatically from the registered `@command` decorators.
+`!snippet view <doi-or-link>` and `!snippet add` return the `snippet`
+tab type, rendered by `SnippetTab.svelte`.  The view tab exposes:
+
+- **Edit** — opens `snippet-edit` (reuses the `snippet-add` fields,
+  prefilled with the current content, DOI read-only); submits via
+  `!snippet modify`
+- **Delete** — confirm dialog, tombstones and closes the tab
+- **Copy Embed** — copies the iframe tag to the clipboard
+
+`!snippet modify <doi-or-link>` with **no change flags** is a shortcut
+for view → Edit: it resolves the record and returns the prefilled edit
+form.
+
+The embed base URL can be overridden for development via
+`localStorage["ronzzdoi_embed_base"]`.
+
+The command tree is backend-driven — `!snippet add|view|search|modify|delete`
+get autocomplete automatically from the registered `@command` decorators.
 
 ## Tests
 
@@ -161,7 +179,7 @@ Snippets are created against the **write** API, `https://doi-admin.ronzz.org`
 ```bash
 export RONZZDOI_SERVER=https://doi-admin.ronzz.org
 export RONZZDOI_API_KEY=<admin key>
-ronzzdoi snippet assign --type code --content "print('hi')" --language python
+ronzzdoi snippet add --type code --content "print('hi')" --language python
 ```
 
 The resulting DOI is served publicly without a key:

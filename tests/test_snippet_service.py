@@ -267,6 +267,29 @@ class TestDelete:
             svc.delete(doi["doi"])
 
 
+# ── enrich() ────────────────────────────────────────────────────────────────
+
+
+class TestEnrich:
+    def test_enrich_snippet_record_merges_content(self, svc):
+        """enrich() attaches snippet fields to a raw DOI list record."""
+        created = svc.assign("code", "print('hi')", language="python", title="Hi")
+        # Raw record as returned by list_dois (no snippet fields).
+        raw = svc._doi_svc.resolve(created["doi"], include_redirects=False)
+        assert "content" not in raw
+        enriched = svc.enrich(raw)
+        assert enriched["content"] == "print('hi')"
+        assert enriched["content_kind"] == "code"
+        assert enriched["language"] == "python"
+
+    def test_enrich_non_snippet_passthrough(self, svc, doi_svc):
+        """enrich() leaves non-snippet records unchanged."""
+        book = doi_svc.assign("https://example.com", doi_type="book")
+        enriched = svc.enrich(book)
+        assert enriched is book
+        assert "content" not in enriched
+
+
 # ── Unified search ──────────────────────────────────────────────────────────
 
 
