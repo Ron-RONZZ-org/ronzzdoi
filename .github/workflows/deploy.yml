@@ -17,7 +17,7 @@ jobs:
             set -e
             sudo -u ronzz git -C /opt/ronzzdoi pull origin main
             sudo -u ronzz HOME=/opt/ronzzdoi sh -c 'cd /opt/ronzzdoi && uv sync --extra public --no-dev'
-            sudo systemctl restart ronzzdoi
+            sudo systemctl restart ronzzdoi ronzzdoi-internal
             sleep 2
-            sudo systemctl status ronzzdoi --no-pager | head -5
+            sudo systemctl status ronzzdoi ronzzdoi-internal --no-pager | head -10
             echo "=== Deploy OK ==="
