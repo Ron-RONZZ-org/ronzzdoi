@@ -58,8 +58,8 @@ async def execute_command(
     that the frontend renders as a tab.
 
     DOI-bearing results (detail views, list rows) get a ``resolve_url``
-    injected from the request base URL so the GUI can copy/click a
-    browser-resolvable DOI URL.
+    injected from the canonical resolution base (``RONZZDOI_RESOLVE_BASE``)
+    so the GUI can copy/click a browser-resolvable DOI URL.
     """
     try:
         result = dispatch(body.tokens, body.flags, user)
@@ -70,7 +70,7 @@ async def execute_command(
 
     data = result.get("data")
     if data is not None:
-        _inject_resolve_url(data, str(request.base_url))
+        _inject_resolve_url(data)
 
     return CommandResponse(
         type=result.get("type", "detail"),

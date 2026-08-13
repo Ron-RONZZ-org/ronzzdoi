@@ -11,6 +11,7 @@ FastAPI/Starlette matches them first.
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -52,6 +53,22 @@ _search_svc: DBDOIService | None = None
 # The redirect catch-all is on a separate router registered later.
 router = APIRouter(tags=["doi"])
 
+# ── Canonical resolution base ──────────────────────────────────────────
+# A DOI's browser-resolvable URL must be stable and independent of the
+# API origin that served the request (the admin GUI runs on
+# doi-admin.ronzz.org, the resolver on doi.ronzz.org — issue #40).
+_DEFAULT_RESOLVE_BASE = "https://doi.ronzz.org"
+"""Default canonical base for browser-resolvable DOI URLs."""
+
+
+def _resolve_base() -> str:
+    """Return the canonical resolution base for DOI links.
+
+    Read from ``RONZZDOI_RESOLVE_BASE`` at call time (like the public
+    rate limits) so tests and operators can override without restart.
+    """
+    return os.environ.get("RONZZDOI_RESOLVE_BASE", _DEFAULT_RESOLVE_BASE).rstrip("/")
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # mount helpers
@@ -78,7 +95,7 @@ def mount_doi_routes(
     app.include_router(router)
 
 
-def register_doi_redirect(app: Any) -> None:
+def register_doi_redirect(app: Any, doi_svc: DOIService | None = None) -> None:
     """Register the public DOI redirect catch-all route.
 
     MUST be called as the LAST route registration so that all API
@@ -86,6 +103,14 @@ def register_doi_redirect(app: Any) -> None:
 
     The route only responds to paths starting with ``10.ronzz/``.
     Other paths return 404 without interfering with other handlers.
+
+    Args:
+        app: The FastAPI application instance.
+        doi_svc: Optional DOI service for the redirect handler.  When
+            omitted, falls back to the module-level service (set by
+            ``mount_doi_routes``).  Pass it explicitly in modes that do
+            not mount the internal DOI routes (e.g. ``"public"``) so the
+            redirect still works without crashing.
     """
     redirect_router = APIRouter()
 
@@ -93,7 +118,7 @@ def register_doi_redirect(app: Any) -> None:
         "/{doi:path}", methods=["GET", "HEAD"], include_in_schema=False
     )
     async def redirect_doi(doi: str, request: Request) -> Response:
-        return _handle_redirect(doi, request)
+        return _handle_redirect(doi, request, doi_svc)
 
     app.include_router(redirect_router)
 
@@ -115,15 +140,19 @@ def _get_doi_svc() -> DOIService:
 def _record_to_response(
     record: dict[str, Any],
     include_status: bool = False,
-    base_url: str | None = None,
 ) -> dict[str, Any]:
     """Convert a DOI service record dict to an API response dict.
 
     Args:
         record: Raw record dict from the DOI service.
         include_status: If True, include ``status`` and ``redirect_history``.
-        base_url: Request base URL (e.g. ``str(request.base_url)``).  When
-            provided, a browser-resolvable ``resolve_url`` is added.
+
+    Returns:
+        Response dict.  A browser-resolvable ``resolve_url`` is always
+        added, built from the canonical resolution base
+        (``RONZZDOI_RESOLVE_BASE``, default ``https://doi.ronzz.org``) —
+        not from the request origin, so the URL is stable across the
+        admin GUI (doi-admin.ronzz.org) and any other API consumer.
     """
     title = record.get("title", "")
     # Multilingual titles are stored as JSON text — deserialize to a dict
@@ -146,9 +175,8 @@ def _record_to_response(
         "created_at": record["created_at"],
         "updated_at": record["updated_at"],
         "deleted_at": record.get("deleted_at"),
+        "resolve_url": f"{_resolve_base()}/{record['doi']}",
     }
-    if base_url:
-        result["resolve_url"] = f"{base_url.rstrip('/')}/{record['doi']}"
     if record.get("content_kind"):
         # Snippet hits from unified search carry content_kind — pass it
         # through so the frontend can render them distinctly.
@@ -159,7 +187,7 @@ def _record_to_response(
     return result
 
 
-def _inject_resolve_url(data: Any, base_url: str) -> Any:
+def _inject_resolve_url(data: Any) -> Any:
     """Recursively add ``resolve_url`` to any dict that has a ``doi`` key.
 
     Used by the command endpoint so that command-driven GUI tabs
@@ -169,12 +197,12 @@ def _inject_resolve_url(data: Any, base_url: str) -> Any:
     if isinstance(data, dict):
         doi = data.get("doi")
         if isinstance(doi, str) and "resolve_url" not in data:
-            data["resolve_url"] = f"{base_url.rstrip('/')}/{doi}"
+            data["resolve_url"] = f"{_resolve_base()}/{doi}"
         for value in data.values():
-            _inject_resolve_url(value, base_url)
+            _inject_resolve_url(value)
     elif isinstance(data, list):
         for item in data:
-            _inject_resolve_url(item, base_url)
+            _inject_resolve_url(item)
     return data
 
 
@@ -216,9 +244,7 @@ async def merge_dois(
         raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=str(exc))
     except DOIAmbiguousError as exc:
         raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail=str(exc))
-    return _record_to_response(
-        result, include_status=True, base_url=str(request.base_url)
-    )
+    return _record_to_response(result, include_status=True)
 
 
 @router.get("/api/v1/doi")
@@ -238,9 +264,8 @@ async def list_dois(
     results = svc.list_dois(limit=limit, offset=offset, include_deleted=include_deleted)
     if doi_type:
         results = [r for r in results if r.get("doi_type") == doi_type]
-    base_url = str(request.base_url)
     return {
-        "items": [_record_to_response(r, base_url=base_url) for r in results],
+        "items": [_record_to_response(r) for r in results],
         "total": len(results),
         "limit": limit,
         "offset": offset,
@@ -291,14 +316,13 @@ async def search_dois(
     Falls back to basic listing.
     """
     svc = _get_doi_svc()
-    base_url = str(request.base_url)
 
     if not q.strip():
         results = svc.list_dois(limit=limit, offset=offset)
         if doi_type:
             results = [r for r in results if r.get("doi_type") == doi_type]
         return {
-            "items": [_record_to_response(r, base_url=base_url) for r in results],
+            "items": [_record_to_response(r) for r in results],
             "total": len(results),
             "limit": limit,
             "offset": offset,
@@ -313,7 +337,7 @@ async def search_dois(
         results = [r for r in results if r.get("doi_type") == doi_type][:limit]
 
     return {
-        "items": [_record_to_response(r, base_url=base_url) for r in results],
+        "items": [_record_to_response(r) for r in results],
         "total": len(results),
         "limit": limit,
         "offset": offset,
@@ -344,7 +368,7 @@ async def assign_doi(
         raise HTTPException(status_code=HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     except DOIExistsError as exc:
         raise HTTPException(status_code=HTTP_409_CONFLICT, detail=str(exc))
-    return _record_to_response(result, base_url=str(request.base_url))
+    return _record_to_response(result)
 
 
 @router.get("/api/v1/doi/{doi:path}")
@@ -370,9 +394,7 @@ async def resolve_doi(
             status_code=HTTP_404_NOT_FOUND, detail=f"DOI '{doi}' not found."
         )
 
-    return _record_to_response(
-        record, include_status=True, base_url=str(request.base_url)
-    )
+    return _record_to_response(record, include_status=True)
 
 
 @router.put("/api/v1/doi/{doi:path}")
@@ -398,9 +420,7 @@ async def modify_doi(
     except DOIAmbiguousError as exc:
         raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail=str(exc))
 
-    return _record_to_response(
-        result, include_status=True, base_url=str(request.base_url)
-    )
+    return _record_to_response(result, include_status=True)
 
 
 @router.delete("/api/v1/doi/{doi:path}", status_code=204)
@@ -426,7 +446,9 @@ async def delete_doi(
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def _handle_redirect(doi: str, request: Request) -> Response:
+def _handle_redirect(
+    doi: str, request: Request, svc: DOIService | None = None
+) -> Response:
     """Handle DOI redirect resolution.
 
     - DOI with ``target_url`` → HTTP 302.
@@ -434,11 +456,25 @@ def _handle_redirect(doi: str, request: Request) -> Response:
     - Tombstoned DOI → HTTP 410.
     - Non-existent DOI → HTTP 404.
     - Non-DOI path → HTTP 404.
+
+    Args:
+        doi: The DOI path (e.g. ``10.ronzz/abc``).
+        request: The incoming request (unused, kept for signature parity).
+        svc: Optional DOI service.  Falls back to the module-level
+            service; if none is available (redirect registered without a
+            service), returns 404 instead of crashing.
     """
     if not is_doi_prefix(doi):
         return Response(status_code=HTTP_404_NOT_FOUND)
 
-    svc = _get_doi_svc()
+    svc = svc or _doi_svc
+    if svc is None:
+        return Response(
+            status_code=HTTP_404_NOT_FOUND,
+            content=b'{"detail":"DOI resolution unavailable"}',
+            media_type="application/json",
+        )
+
     try:
         record = svc.resolve(doi)
     except DOIAmbiguousError:

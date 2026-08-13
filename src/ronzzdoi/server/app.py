@@ -170,6 +170,8 @@ def create_app(
         return {"status": "ok", "service": "ronzzdoi"}
 
     # ── DOI redirect (must be last — catch-all route) ─────────────────
-    register_doi_redirect(app)
+    # Pass the DOI service explicitly so the redirect works even in modes
+    # that do not mount the internal DOI routes (e.g. "public").
+    register_doi_redirect(app, doi_crud_svc)
 
     return app
