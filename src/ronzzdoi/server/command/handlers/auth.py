@@ -6,21 +6,23 @@ Lazily resolves ``_auth_db`` from ``auth_routes`` at dispatch time.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from lighterauth.api_key import generate_api_key, lookup_api_keys
 
 from ronzzdoi.auth.config import ALL_PERMISSIONS
+from ronzzdoi.server import auth_routes as _auth_routes
 from ronzzdoi.server.command.handlers import check_permission
 from ronzzdoi.server.command.registry import command
-from ronzzdoi.server import auth_routes as _auth_routes
 
 
 def _ensure_db() -> None:
     """Raise if auth DB is not initialised."""
     if _auth_routes._auth_db is None:
-        raise RuntimeError("Auth database not initialised. Call mount_auth_routes() during startup.")
+        raise RuntimeError(
+            "Auth database not initialised. Call mount_auth_routes() during startup."
+        )
 
 
 # ── auth.api_key.list ───────────────────────────────────────────────────
@@ -121,7 +123,7 @@ def auth_api_key_create(
 
     raw_key, prefix, hashed_key = generate_api_key()
     key_id = _auth_routes._generate_id()
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     expires_at = flags.get("expires-at") or flags.get("expires_at", "")
 
     owner = flags.get("owner", "")
@@ -192,7 +194,8 @@ def auth_api_key_update(
                     "key_id": flags.get("id", ""),
                     "name": flags.get("name", ""),
                     "permission": flags.get("permission", ""),
-                    "expires_at": flags.get("expires-at", "") or flags.get("expires_at", ""),
+                    "expires_at": flags.get("expires-at", "")
+                    or flags.get("expires_at", ""),
                 },
             },
         }
@@ -200,7 +203,9 @@ def auth_api_key_update(
     _ensure_db()
 
     # Verify key exists
-    row = _auth_routes._auth_db.execute_one("SELECT * FROM api_keys WHERE id = ?", (key_id,))  # type: ignore[union-attr]
+    row = _auth_routes._auth_db.execute_one(
+        "SELECT * FROM api_keys WHERE id = ?", (key_id,)
+    )  # type: ignore[union-attr]
     if row is None:
         return {
             "type": "error",
@@ -234,7 +239,7 @@ def auth_api_key_update(
             "data": {"message": "No fields to update."},
         }
 
-    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    updates["updated_at"] = datetime.now(UTC).isoformat()
     set_clauses = [f"{k} = ?" for k in updates]
     values = [updates[k] for k in updates] + [key_id]
 
@@ -244,7 +249,9 @@ def auth_api_key_update(
     )
 
     # Re-read and return
-    updated = _auth_routes._auth_db.execute_one("SELECT * FROM api_keys WHERE id = ?", (key_id,))  # type: ignore[union-attr]
+    updated = _auth_routes._auth_db.execute_one(
+        "SELECT * FROM api_keys WHERE id = ?", (key_id,)
+    )  # type: ignore[union-attr]
     if updated is None:
         return {
             "type": "error",
@@ -296,7 +303,9 @@ def auth_api_key_delete(
 
     _ensure_db()
 
-    row = _auth_routes._auth_db.execute_one("SELECT id, name FROM api_keys WHERE id = ?", (key_id,))  # type: ignore[union-attr]
+    row = _auth_routes._auth_db.execute_one(
+        "SELECT id, name FROM api_keys WHERE id = ?", (key_id,)
+    )  # type: ignore[union-attr]
     if row is None:
         return {
             "type": "error",

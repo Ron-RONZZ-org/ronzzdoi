@@ -57,25 +57,14 @@ export function getFields(formType, typeOptions, typeSchemas, fieldValues) {
         { name: "doi_type", label: "DOI Type", type: "autocomplete", required: false, help: "Leave blank to keep current", options: typeOptions },
         ...metadataFields(typeSchemas, fieldValues),
       ];
-    case "snippet-assign": {
-      // Text/Code/Math toggle switches which fields are shown.
-      const kind = fieldValues.type || "text";
-      const fields = [
-        { name: "type", label: "Content Type", type: "segmented", required: true, options: ["text", "code", "math"], help: "Text quotation, code snippet, or KaTeX math" },
-        { name: "content", label: "Content", type: "textarea", required: true, help: kind === "code" ? "Paste the code snippet" : kind === "math" ? "KaTeX math source (e.g. \\frac{a}{b})" : "The quotation text" },
-        { name: "title", label: "Title", type: "text", required: false, translateable: true, help: "Short human-readable title (optional)" },
+    case "snippet-add":
+      return snippetFields(fieldValues);
+    case "snippet-edit":
+      // Edit reuses the add fields, prefilled, plus a read-only DOI.
+      return [
+        { name: "doi", label: "DOI", type: "text", required: true, readonly: true, help: "The snippet DOI (read-only)" },
+        ...snippetFields(fieldValues),
       ];
-      if (kind === "code") {
-        fields.push({ name: "language", label: "Language", type: "text", required: false, help: "python, javascript, bash, …" });
-      } else if (kind === "text") {
-        fields.push(
-          { name: "source_doi", label: "Source DOI", type: "text", required: false, help: "The book/document DOI this quote is from (optional)" },
-          { name: "page_start", label: "Page Start", type: "text", required: false },
-          { name: "page_end", label: "Page End", type: "text", required: false },
-        );
-      }
-      return fields;
-    }
     case "auth-key-create":
       return [
         { name: "name", label: "Key Name", type: "text", required: true },
@@ -96,4 +85,27 @@ export function getFields(formType, typeOptions, typeSchemas, fieldValues) {
     default:
       return [];
   }
+}
+
+/**
+ * Shared snippet form fields (used by snippet-add and snippet-edit).
+ * The Text/Code/Math toggle switches which fields are shown.
+ */
+function snippetFields(fieldValues) {
+  const kind = fieldValues.type || "text";
+  const fields = [
+    { name: "type", label: "Content Type", type: "segmented", required: true, options: ["text", "code", "math"], help: "Text quotation, code snippet, or KaTeX math" },
+    { name: "content", label: "Content", type: "textarea", required: true, help: kind === "code" ? "Paste the code snippet" : kind === "math" ? "KaTeX math source (e.g. \\frac{a}{b})" : "The quotation text" },
+    { name: "title", label: "Title", type: "text", required: false, translateable: true, help: "Short human-readable title (optional)" },
+  ];
+  if (kind === "code") {
+    fields.push({ name: "language", label: "Language", type: "text", required: false, help: "python, javascript, bash, …" });
+  } else if (kind === "text") {
+    fields.push(
+      { name: "source_doi", label: "Source DOI", type: "text", required: false, help: "The book/document DOI this quote is from (optional)" },
+      { name: "page_start", label: "Page Start", type: "text", required: false },
+      { name: "page_end", label: "Page End", type: "text", required: false },
+    );
+  }
+  return fields;
 }

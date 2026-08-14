@@ -13,9 +13,9 @@ import pytest
 from ronzzdoi.cli.client import RonzzdoiClient
 from ronzzdoi.cli.snippet import (
     DEFAULT_EMBED_BASE,
-    _cmd_assign,
+    _cmd_add,
     _cmd_embed,
-    _cmd_resolve,
+    _cmd_view,
     _normalize_doi,
 )
 
@@ -57,6 +57,10 @@ def test_normalize_doi_full() -> None:
 
 def test_normalize_doi_suffix() -> None:
     assert _normalize_doi("abc123") == "10.ronzz/abc123"
+
+
+def test_normalize_doi_full_link() -> None:
+    assert _normalize_doi("https://doi.ronzz.org/10.ronzz/abc123") == "10.ronzz/abc123"
 
 
 # ── embed ──────────────────────────────────────────────────────────────────
@@ -163,12 +167,12 @@ class TestEmbed:
         assert "Hamlet soliloquy" in out
 
 
-# ── assign ─────────────────────────────────────────────────────────────────
+# ── add ────────────────────────────────────────────────────────────────────
 
 
-class TestAssign:
-    def test_assign_sends_fields(self, capsys: pytest.CaptureFixture) -> None:
-        """assign sends content_kind/content + optional fields."""
+class TestAdd:
+    def test_add_sends_fields(self, capsys: pytest.CaptureFixture) -> None:
+        """add sends content_kind/content + optional fields."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             import json
@@ -189,12 +193,12 @@ class TestAssign:
             page_start="Act 3",
             page_end="",
         )
-        _cmd_assign(args, _mock_client(handler))
+        _cmd_add(args, _mock_client(handler))
         out = capsys.readouterr().out
-        assert "Snippet assigned: 10.ronzz/abc123def456" in out
+        assert "Snippet added: 10.ronzz/abc123def456" in out
 
     def test_assign_multilingual_title(self, capsys: pytest.CaptureFixture) -> None:
-        """assign sends a language-map title through (#47)."""
+        """add sends a language-map title through (#47)."""
 
         def handler(request: httpx.Request) -> httpx.Response:
             import json
@@ -214,21 +218,21 @@ class TestAssign:
             page_start="",
             page_end="",
         )
-        _cmd_assign(args, _mock_client(handler))
+        _cmd_add(args, _mock_client(handler))
         out = capsys.readouterr().out
-        assert "Snippet assigned" in out
+        assert "Snippet added" in out
 
 
-# ── resolve ────────────────────────────────────────────────────────────────
+# ── view ───────────────────────────────────────────────────────────────────
 
 
-class TestResolve:
-    def test_resolve_prints_content(self, capsys: pytest.CaptureFixture) -> None:
+class TestView:
+    def test_view_prints_content(self, capsys: pytest.CaptureFixture) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(200, json=SNIPPET_RESPONSE)
 
         args = _make_args(doi="10.ronzz/abc123")
-        _cmd_resolve(args, _mock_client(handler))
+        _cmd_view(args, _mock_client(handler))
         out = capsys.readouterr().out
         assert "Snippet:  10.ronzz/abc123def456" in out
         assert "To be, or not to be" in out

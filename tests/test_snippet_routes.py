@@ -65,7 +65,7 @@ def snippet_app(auth_db: LighterDB, ronzzdoi_db: LighterDB) -> FastAPI:
 
     mount_auth_routes(app, auth_db)
     mount_command_routes(app)
-    mount_doi_routes(app, doi_svc=doi_crud_svc)
+    mount_doi_routes(app, doi_svc=doi_crud_svc, search_svc=db_search_svc)
     mount_snippet_routes(app, snippet_svc)
     mount_public_routes(
         app, doi_svc=doi_crud_svc, search_svc=db_search_svc, snippet_svc=snippet_svc
@@ -330,33 +330,33 @@ class TestDeleteRoute:
 
 
 class TestSnippetCommand:
-    def test_assign_missing_content_returns_form(self, client, admin_api_key_edit):
+    def test_add_missing_content_returns_form(self, client, admin_api_key_edit):
         resp = client.post(
             "/api/v1/command",
             json={
-                "tokens": ["snippet", "assign"],
+                "tokens": ["snippet", "add"],
                 "flags": {},
-                "raw_input": "!snippet assign",
+                "raw_input": "!snippet add",
             },
             headers=_auth_headers(admin_api_key_edit),
         )
         assert resp.status_code == 200
         body = resp.json()
         assert body["type"] == "form"
-        assert body["data"]["form"] == "snippet-assign"
+        assert body["data"]["form"] == "snippet-add"
 
-    def test_assign_full_flags(self, client, admin_api_key_edit):
+    def test_add_full_flags(self, client, admin_api_key_edit):
         resp = client.post(
             "/api/v1/command",
             json={
-                "tokens": ["snippet", "assign"],
+                "tokens": ["snippet", "add"],
                 "flags": {
                     "type": "code",
                     "content": "print('hello')",
                     "language": "python",
                     "title": "Hello",
                 },
-                "raw_input": "!snippet assign --type code --content print('hello')",
+                "raw_input": "!snippet add --type code --content print('hello')",
             },
             headers=_auth_headers(admin_api_key_edit),
         )
@@ -366,7 +366,7 @@ class TestSnippetCommand:
         assert body["data"]["content_kind"] == "code"
         assert body["data"]["content"] == "print('hello')"
 
-    def test_resolve_via_command(self, client, admin_api_key_edit):
+    def test_view_via_command(self, client, admin_api_key_edit):
         created = client.post(
             "/api/v1/snippet",
             json={"content_kind": "math", "content": r"\frac{1}{2}"},
@@ -375,7 +375,7 @@ class TestSnippetCommand:
         resp = client.post(
             "/api/v1/command",
             json={
-                "tokens": ["snippet", "resolve", created["doi"]],
+                "tokens": ["snippet", "view", created["doi"]],
                 "flags": {},
                 "raw_input": "",
             },
@@ -386,11 +386,131 @@ class TestSnippetCommand:
         assert body["type"] == "snippet"
         assert body["data"]["content_kind"] == "math"
 
-    def test_command_requires_edit_for_assign(self, client, admin_api_key_readonly):
+    def test_view_accepts_full_link(self, client, admin_api_key_edit):
+        created = client.post(
+            "/api/v1/snippet",
+            json={"content_kind": "text", "content": "linked"},
+            headers=_auth_headers(admin_api_key_edit),
+        ).json()
         resp = client.post(
             "/api/v1/command",
             json={
-                "tokens": ["snippet", "assign"],
+                "tokens": [
+                    "snippet",
+                    "view",
+                    f"https://doi.ronzz.org/{created['doi']}",
+                ],
+                "flags": {},
+                "raw_input": "",
+            },
+            headers=_auth_headers(admin_api_key_edit),
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["type"] == "snippet"
+        assert body["data"]["content"] == "linked"
+
+    def test_view_non_snippet_returns_error(self, client, admin_api_key_edit):
+        book = client.post(
+            "/api/v1/doi",
+            json={"target_url": "https://example.com", "doi_type": "book"},
+            headers=_auth_headers(admin_api_key_edit),
+        ).json()
+        resp = client.post(
+            "/api/v1/command",
+            json={
+                "tokens": ["snippet", "view", book["doi"]],
+                "flags": {},
+                "raw_input": "",
+            },
+            headers=_auth_headers(admin_api_key_edit),
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["type"] == "error"
+        assert "not a snippet" in body["data"]["message"]
+
+    def test_search_lists_snippets(self, client, admin_api_key_edit):
+        client.post(
+            "/api/v1/snippet",
+            json={"content_kind": "text", "content": "alpha", "title": "Alpha"},
+            headers=_auth_headers(admin_api_key_edit),
+        )
+        resp = client.post(
+            "/api/v1/command",
+            json={
+                "tokens": ["snippet", "search"],
+                "flags": {},
+                "raw_input": "!snippet search",
+            },
+            headers=_auth_headers(admin_api_key_edit),
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["type"] == "snippet-list"
+        assert body["data"]["results"]
+        assert body["data"]["results"][0]["content_kind"] == "text"
+
+    def test_search_filters_by_query(self, client, admin_api_key_edit):
+        client.post(
+            "/api/v1/snippet",
+            json={"content_kind": "text", "content": "beta marker"},
+            headers=_auth_headers(admin_api_key_edit),
+        )
+        client.post(
+            "/api/v1/snippet",
+            json={"content_kind": "code", "content": "gamma"},
+            headers=_auth_headers(admin_api_key_edit),
+        )
+        resp = client.post(
+            "/api/v1/command",
+            json={
+                "tokens": ["snippet", "search", "marker"],
+                "flags": {},
+                "raw_input": "!snippet search marker",
+            },
+            headers=_auth_headers(admin_api_key_edit),
+        )
+        body = resp.json()
+        assert body["type"] == "snippet-list"
+        dois = [r["doi"] for r in body["data"]["results"]]
+        assert len(dois) == 1
+
+    def test_modify_without_flags_returns_edit_form(self, client, admin_api_key_edit):
+        created = client.post(
+            "/api/v1/snippet",
+            json={
+                "content_kind": "code",
+                "content": "old code",
+                "language": "js",
+                "title": "Old",
+            },
+            headers=_auth_headers(admin_api_key_edit),
+        ).json()
+        resp = client.post(
+            "/api/v1/command",
+            json={
+                "tokens": ["snippet", "modify", created["doi"]],
+                "flags": {},
+                "raw_input": "",
+            },
+            headers=_auth_headers(admin_api_key_edit),
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["type"] == "form"
+        assert body["data"]["form"] == "snippet-edit"
+        initial = body["data"]["initialData"]
+        assert initial["doi"] == created["doi"]
+        assert initial["type"] == "code"
+        assert initial["content"] == "old code"
+        assert initial["language"] == "js"
+
+    def test_command_requires_edit_for_add(self, client, admin_api_key_readonly):
+        resp = client.post(
+            "/api/v1/command",
+            json={
+                "tokens": ["snippet", "add"],
                 "flags": {"type": "text", "content": "x"},
                 "raw_input": "",
             },

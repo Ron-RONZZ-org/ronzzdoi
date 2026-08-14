@@ -125,6 +125,7 @@
     value={value || ""}
     oninput={(e) => setValue(e.target.value)}
     placeholder={field.help || ""}
+    disabled={field.readonly}
   />
 {/if}
 

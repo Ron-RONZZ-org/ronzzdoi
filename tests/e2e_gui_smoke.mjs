@@ -315,14 +315,14 @@ async function runTests() {
   });
 
   // ═══════════════════════════════════════════
-  // SNIPPETS — form toggle + copy embed
+  // SNIPPETS — form toggle, list, copy embed
   // ═══════════════════════════════════════════
   console.log("\n--- SNIPPETS ---");
 
-  await test("!snippet assign (incomplete) opens form with Text/Code/Math toggle", async () => {
-    await typeCommand("!snippet assign");
+  await test("!snippet add (incomplete) opens form with Text/Code/Math toggle", async () => {
+    await typeCommand("!snippet add");
     await pressEnter();
-    await assertTabOpened("Assign");
+    await assertTabOpened("Add");
 
     const toggle = page.locator('[role="radiogroup"][aria-label="Content Type"]');
     await toggle.waitFor({ state: "visible", timeout: 3000 });
@@ -333,10 +333,21 @@ async function runTests() {
       `Toggle should offer text/code/math, got: ${kinds.join(", ")}`);
   });
 
-  await test("!snippet assign form submits → snippet tab with Copy Embed", async () => {
-    await typeCommand("!snippet assign");
+  await test("!snippet search opens snippet list tab", async () => {
+    await typeCommand("!snippet search");
     await pressEnter();
-    await assertTabOpened("Assign");
+    await assertTabOpened("Snippet Search");
+
+    // Snippet list rows render a kind badge (text/code/math).
+    const rows = page.locator('[role="listbox"][aria-label="Snippets"] .row');
+    const count = await rows.count();
+    assert(count > 0, `Snippet list should have rows, found ${count}`);
+  });
+
+  await test("!snippet add form submits → snippet tab with Copy Embed", async () => {
+    await typeCommand("!snippet add");
+    await pressEnter();
+    await assertTabOpened("Add");
 
     // Text is the default kind — fill content + title
     const content = page.locator("#content");
@@ -357,9 +368,9 @@ async function runTests() {
 
   await test("Copy Embed copies an iframe tag to the clipboard", async () => {
     // Self-contained: create a fresh snippet tab, then copy from it
-    await typeCommand("!snippet assign");
+    await typeCommand("!snippet add");
     await pressEnter();
-    await assertTabOpened("Assign");
+    await assertTabOpened("Add");
 
     await page.locator("#content").fill("Cogito ergo sum.");
     await page.locator("#title").fill("Descartes quote");
@@ -539,9 +550,9 @@ async function runTests() {
     });
 
     await test("Snippet assign form: title offers translations (#47.2)", async () => {
-      await typeCommand("!snippet assign");
+      await typeCommand("!snippet add");
       await pressEnter();
-      await assertTabOpened("Assign");
+      await assertTabOpened("Add");
 
       const titleField = page.locator(".form-field", { hasText: /^Title/ }).first();
       await titleField.waitFor({ state: "visible", timeout: 3000 });
@@ -578,13 +589,22 @@ async function runTests() {
       await confirmBtn.click();
       await sleep(900);
 
-      // The DOI is gone from search results.
-      await typeCommand("!doi search Tombstone Target");
+      // The detail tab closes and the success banner appears.
+      const bannerText = (await page.locator(".banner, [role='status'], .action-banner")
+        .allTextContents().catch(() => [])).join(" ");
+      assert(bannerText.includes("tombstoned"),
+        `Tombstone must show a success banner, got: "${bannerText.slice(0, 200)}"`);
+
+      // Resolving the DOI reports the tombstone status.  The banner carries
+      // the tombstoned DOI id ("DOI tombstoned: 10.ronzz/…").
+      const doiMatch = bannerText.match(/10\.ronzz\/[0-9a-f]{32}/);
+      assert(doiMatch, `Banner should carry the tombstoned DOI, got: "${bannerText.slice(0, 200)}"`);
+      await typeCommand(`!doi resolve ${doiMatch[0]}`);
       await pressEnter();
-      await assertTabOpened("DOI");
-      const listText = (await page.locator(".doi-list").textContent() || "");
-      assert(!listText.includes("Tombstone Target"),
-        `Tombstoned DOI must not appear in search results, got: "${listText.trim().slice(0, 200)}"`);
+      await sleep(800);
+      const detailText = (await page.locator(".detail, .doi-list, main").first().textContent() || "");
+      assert(detailText.includes("tombstone") || detailText.includes("deleted"),
+        `Resolving a tombstoned DOI must show tombstone status, got: "${detailText.trim().slice(0, 200)}"`);
     });
 
     await test("DOI detail: metadata renders as table, no raw JSON (#37)", async () => {
@@ -617,9 +637,9 @@ async function runTests() {
 
     await test("Snippet DOI detail view: no citation, Copy Embed button (#41, #43)", async () => {
       // Create a fresh snippet, then open its DOI in the detail view.
-      await typeCommand("!snippet assign");
+      await typeCommand("!snippet add");
       await pressEnter();
-      await assertTabOpened("Assign");
+      await assertTabOpened("Add");
       await page.locator("#content").fill("Cogito ergo sum.");
       await page.locator("#title").fill("Descartes quote");
       await page.locator('button[type="submit"]').click();
@@ -682,6 +702,86 @@ async function runTests() {
       const bannerText = (await page.locator(".banner-text").last().textContent() || "");
       assert(/https:\/\/doi\.ronzz\.org\/10\.ronzz\//.test(bannerText),
         `Copy DOI banner should show the canonical resolver URL, got: "${bannerText}"`);
+    });
+
+    await test("Snippet list → view → edit → delete flow (#49)", async () => {
+      // Unique marker so repeated runs never collide in FTS results.
+      const marker = `E2E49-${Date.now()}`;
+      const title = `Edit Me ${marker}`;
+
+      // Create a snippet with a distinctive title.
+      await typeCommand("!snippet add");
+      await pressEnter();
+      await assertTabOpened("Add");
+      await page.locator("#content").fill(`Unique ${marker} quote`);
+      await page.locator("#title").fill(title);
+      await page.locator('button[type="submit"]').click();
+      await sleep(900);
+      await assertTabOpened("Snippet");
+
+      // Extract the DOI from the embed URL.
+      const embedUrlText = (await page.locator(".embed-url").textContent() || "").trim();
+      const doiMatch = embedUrlText.match(/([a-f0-9]{32})/);
+      assert(doiMatch, `Snippet tab should reveal its DOI, got: "${embedUrlText}"`);
+      const doi = `10.ronzz/${doiMatch[1]}`;
+
+      // Search for the snippet → snippet list tab with a matching row.
+      await typeCommand(`!snippet search ${marker}`);
+      await pressEnter();
+      await assertTabOpened("Snippet Search");
+      const rows = page.locator('[role="listbox"][aria-label="Snippets"] .row');
+      await rows.first().waitFor({ state: "visible", timeout: 4000 });
+      assert((await rows.count()) >= 1,
+        "Snippet search should return at least the E2E snippet");
+
+      // Click the row → snippet view tab opens with Edit + Delete buttons.
+      await rows.first().click();
+      await sleep(900);
+      await assertTabOpened("Snippet");
+      const editBtn = page.locator(".edit-btn");
+      await editBtn.waitFor({ state: "visible", timeout: 4000 });
+      assert((await editBtn.textContent() || "").includes("Edit"),
+        "View tab should expose an Edit button");
+
+      // Edit button → edit form prefilled with current content.
+      await editBtn.click();
+      await sleep(600);
+      await assertTabOpened("Edit Snippet");
+      const contentField = page.locator("#content");
+      await contentField.waitFor({ state: "visible", timeout: 3000 });
+      const prefilled = await contentField.inputValue();
+      assert(prefilled.includes(`Unique ${marker} quote`),
+        `Edit form should prefill current content, got: "${prefilled}"`);
+
+      // The DOI field is read-only and prefilled.
+      const doiField = page.locator("#doi");
+      await doiField.waitFor({ state: "visible", timeout: 3000 });
+      assert((await doiField.inputValue()) === doi,
+        `Edit form DOI should match, got: "${await doiField.inputValue()}"`);
+
+      // Modify the content and submit → snippet tab shows updated content.
+      await contentField.fill(`Unique ${marker} quote v2`);
+      await page.locator('button[type="submit"]').click();
+      await sleep(900);
+      await assertTabOpened("Snippet");
+      const bodyText = (await page.locator(".tab-content.active").textContent() || "");
+      assert(bodyText.includes(`Unique ${marker} quote v2`),
+        "View tab should show the updated content after edit");
+
+      // Delete → confirm dialog → tab closes.
+      const deleteBtn = page.locator(".delete-btn");
+      await deleteBtn.waitFor({ state: "visible", timeout: 3000 });
+      await deleteBtn.click();
+      await sleep(400);
+      const dialog = page.locator('[role="alertdialog"]');
+      await dialog.waitFor({ state: "visible", timeout: 3000 });
+      await dialog.locator('button:has-text("Confirm")').click();
+      await sleep(900);
+
+      // The snippet view tab closes after deletion (banner confirms).
+      const bannerText2 = (await page.locator(".banner-text").last().textContent() || "");
+      assert(bannerText2.includes("tombstoned"),
+        `Delete should confirm tombstone in banner, got: "${bannerText2}"`);
     });
   } else {
     console.log("\n--- AUTHENTICATED FLOWS (skipped — set RONZZDOI_API_KEY) ---");

@@ -1,6 +1,6 @@
 """Snippet subcommands for the ronzzdoi CLI.
 
-Handles ``ronzzdoi snippet assign|resolve|modify|delete|embed``.
+Handles ``ronzzdoi snippet add|view|modify|delete|embed``.
 
 Snippets are embeddable content fragments (text quotations, code blocks,
 KaTeX math).  ``--type`` selects the content kind, mirroring the GUI's
@@ -27,7 +27,14 @@ DEFAULT_EMBED_BASE = "https://doi.ronzz.org/embed"
 
 
 def _normalize_doi(doi: str) -> str:
-    """Prepend ``10.ronzz/`` if the user provided just a suffix."""
+    """Prepend ``10.ronzz/`` if the user provided just a suffix, or extract
+    the DOI from a full resolvable link."""
+    doi = doi.strip()
+    if doi.startswith(("http://", "https://")):
+        path = doi.split("//", 1)[1]
+        path = path.split("/", 1)[1] if "/" in path else ""
+        if path.startswith(DOI_PREFIX + "/"):
+            return path
     if not doi.startswith("10."):
         return f"{DOI_PREFIX}/{doi}"
     return doi
@@ -66,56 +73,57 @@ def register_subparser(subparsers: argparse._SubParsersAction) -> None:
     snippet_parser = subparsers.add_parser(
         "snippet",
         help="Manage embeddable snippets",
-        description="Assign, resolve, modify, and delete snippets "
+        description="Add, view, modify, and delete snippets "
         "(text quotations, code, KaTeX math).",
     )
     snippet_sub = snippet_parser.add_subparsers(dest="snippet_command", required=True)
 
-    # ── snippet assign ──────────────────────────────────────────────────────
-    assign_parser = snippet_sub.add_parser(
-        "assign",
-        help="Assign a new snippet",
-        description="Assign a new snippet DOI. Requires permission: edit.",
+    # ── snippet add ──────────────────────────────────────────────────────────
+    add_parser = snippet_sub.add_parser(
+        "add",
+        help="Add a new snippet",
+        description="Add a new snippet DOI. Requires permission: edit.",
     )
-    assign_parser.add_argument(
+    add_parser.add_argument(
         "--type",
         dest="content_kind",
         required=True,
         choices=CONTENT_KINDS,
         help="Content kind: text (quotation), code, or math (KaTeX)",
     )
-    assign_parser.add_argument(
+    add_parser.add_argument(
         "--content",
         required=True,
         help="The snippet content (quotation text, code, or KaTeX source)",
     )
-    assign_parser.add_argument("--title", default="", help="Human-readable title")
-    assign_parser.add_argument(
+    add_parser.add_argument("--title", default="", help="Human-readable title")
+    add_parser.add_argument(
         "--language",
         default="",
         help=f"Code language hint (code only). Common: {', '.join(SUGGESTED_LANGUAGES[:8])}…",
     )
-    assign_parser.add_argument(
+    add_parser.add_argument(
         "--source-doi",
         default="",
         help="Optional source DOI the snippet quotes from (must exist)",
     )
-    assign_parser.add_argument(
+    add_parser.add_argument(
         "--page-start", default="", help="Source page start (text only)"
     )
-    assign_parser.add_argument(
+    add_parser.add_argument(
         "--page-end", default="", help="Source page end (text only)"
     )
-    assign_parser.set_defaults(func=_cmd_assign)
+    add_parser.set_defaults(func=_cmd_add)
 
-    # ── snippet resolve ─────────────────────────────────────────────────────
-    resolve_parser = snippet_sub.add_parser(
-        "resolve",
-        help="Resolve a snippet",
-        description="Resolve a snippet DOI and print its content. Requires permission: read_only.",
+    # ── snippet view ─────────────────────────────────────────────────────────
+    view_parser = snippet_sub.add_parser(
+        "view",
+        help="View a snippet",
+        description="View a snippet DOI (or full link) and print its content. "
+        "Requires permission: read_only.",
     )
-    resolve_parser.add_argument("doi", help="DOI to resolve (e.g. 10.ronzz/abc123)")
-    resolve_parser.set_defaults(func=_cmd_resolve)
+    view_parser.add_argument("doi", help="DOI or full link (e.g. 10.ronzz/abc123)")
+    view_parser.set_defaults(func=_cmd_view)
 
     # ── snippet modify ──────────────────────────────────────────────────────
     modify_parser = snippet_sub.add_parser(
@@ -174,8 +182,8 @@ def register_subparser(subparsers: argparse._SubParsersAction) -> None:
 # ── Command implementations ────────────────────────────────────────────────
 
 
-def _cmd_assign(args: argparse.Namespace, client: RonzzdoiClient) -> None:
-    """Handle ``snippet assign``."""
+def _cmd_add(args: argparse.Namespace, client: RonzzdoiClient) -> None:
+    """Handle ``snippet add``."""
     body: dict[str, Any] = {
         "content_kind": args.content_kind,
         "content": args.content,
@@ -193,7 +201,7 @@ def _cmd_assign(args: argparse.Namespace, client: RonzzdoiClient) -> None:
         print(json.dumps(result, indent=2))
         return
 
-    print(f"Snippet assigned: {result.get('doi', '?')}")
+    print(f"Snippet added: {result.get('doi', '?')}")
     print(f"  Title:   {_display_title(result.get('title'))}")
     print(f"  Kind:    {result.get('content_kind', '?')}")
     if result.get("language"):
@@ -203,8 +211,8 @@ def _cmd_assign(args: argparse.Namespace, client: RonzzdoiClient) -> None:
     print(f"  Content: {result.get('content', '')}")
 
 
-def _cmd_resolve(args: argparse.Namespace, client: RonzzdoiClient) -> None:
-    """Handle ``snippet resolve``."""
+def _cmd_view(args: argparse.Namespace, client: RonzzdoiClient) -> None:
+    """Handle ``snippet view``."""
     doi = _normalize_doi(args.doi)
     result = client.get(f"/api/v1/snippet/{doi}", params={"include_redirects": "true"})
 

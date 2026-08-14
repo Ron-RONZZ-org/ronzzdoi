@@ -34,11 +34,14 @@ def test_citation_show(capsys: pytest.CaptureFixture) -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert "style=apa" in str(request.url)
-        return httpx.Response(200, json={
-            "doi": "10.ronzz/abc",
-            "style": "apa",
-            "citation": "Doe, J. (2026). *Example Title*. Publisher.",
-        })
+        return httpx.Response(
+            200,
+            json={
+                "doi": "10.ronzz/abc",
+                "style": "apa",
+                "citation": "Doe, J. (2026). *Example Title*. Publisher.",
+            },
+        )
 
     client = _mock_client(handler)
     args = _make_args(doi="10.ronzz/abc", style="apa")
@@ -53,11 +56,14 @@ def test_citation_show_style_param(capsys: pytest.CaptureFixture) -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert "style=vancouver" in str(request.url)
-        return httpx.Response(200, json={
-            "doi": "10.ronzz/abc",
-            "style": "vancouver",
-            "citation": "1. Doe J. Title. Publisher; 2026.",
-        })
+        return httpx.Response(
+            200,
+            json={
+                "doi": "10.ronzz/abc",
+                "style": "vancouver",
+                "citation": "1. Doe J. Title. Publisher; 2026.",
+            },
+        )
 
     client = _mock_client(handler)
     args = _make_args(doi="10.ronzz/abc", style="vancouver")
@@ -70,7 +76,9 @@ def test_citation_show_json(capsys: pytest.CaptureFixture) -> None:
     """citation show --json outputs raw JSON."""
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"doi": "10.ronzz/abc", "style": "apa", "citation": "..."})
+        return httpx.Response(
+            200, json={"doi": "10.ronzz/abc", "style": "apa", "citation": "..."}
+        )
 
     client = _mock_client(handler)
     args = _make_args(doi="10.ronzz/abc", style="apa", json_output=True)
@@ -88,10 +96,13 @@ def test_citation_styles(capsys: pytest.CaptureFixture) -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert "style" not in str(request.url)
-        return httpx.Response(200, json={
-            "doi": "10.ronzz/abc",
-            "styles": ["apa", "vancouver", "mla", "chicago", "bibtex"],
-        })
+        return httpx.Response(
+            200,
+            json={
+                "doi": "10.ronzz/abc",
+                "styles": ["apa", "vancouver", "mla", "chicago", "bibtex"],
+            },
+        )
 
     client = _mock_client(handler)
     args = _make_args(doi="10.ronzz/abc")

@@ -12,7 +12,8 @@ Covers:
 
 from __future__ import annotations
 
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
@@ -23,7 +24,6 @@ from lighterauth.middleware import Lighterauth
 from ronzzdoi.server.auth_middleware import init_auth_deps
 from ronzzdoi.server.doi_routes import register_doi_redirect
 from ronzzdoi.server.public_routes import mount_public_routes
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Fixtures
@@ -85,7 +85,6 @@ def full_app(
     from ronzzdoi.server.citation_routes import mount_citation_routes
     from ronzzdoi.server.command_routes import mount_command_routes
     from ronzzdoi.server.doi_routes import mount_doi_routes
-    from ronzzdoi.server.search_routes import mount_search_routes
 
     auth = Lighterauth(auth_db, keyonly=True)
     init_auth_deps(auth)
@@ -250,9 +249,7 @@ class TestPublicDOIResolve:
 class TestPublicSearch:
     """``GET /public/v1/search`` — public DOI search."""
 
-    def test_search_no_auth(
-        self, public_client: TestClient, doi_crud_svc: Any
-    ) -> None:
+    def test_search_no_auth(self, public_client: TestClient, doi_crud_svc: Any) -> None:
         """Search without auth → succeeds."""
         _seed_book(doi_crud_svc)
         resp = public_client.get("/public/v1/search?q=Public")
@@ -289,9 +286,7 @@ class TestPublicSearch:
             title="Webpage Search Test",
             metadata={},
         )
-        resp = public_client.get(
-            "/public/v1/search?q=Search&doi_type=webpage"
-        )
+        resp = public_client.get("/public/v1/search?q=Search&doi_type=webpage")
         assert resp.status_code == 200, resp.text
         data = resp.json()
         assert all(item["doi_type"] == "webpage" for item in data["items"])
@@ -325,17 +320,13 @@ class TestPublicCitation:
     ) -> None:
         """Citation without auth → succeeds."""
         book = _seed_book(doi_crud_svc)
-        resp = public_client.get(
-            f"/public/v1/citation?doi={book['doi']}&style=apa"
-        )
+        resp = public_client.get(f"/public/v1/citation?doi={book['doi']}&style=apa")
         assert resp.status_code == 200, resp.text
         data = resp.json()
         assert data["style"] == "apa"
         assert "citation" in data
 
-    def test_citation_nonexistent_doi(
-        self, public_client: TestClient
-    ) -> None:
+    def test_citation_nonexistent_doi(self, public_client: TestClient) -> None:
         """Non-existent DOI citation → 404."""
         resp = public_client.get(
             "/public/v1/citation?doi=10.ronzz/nonexistent&style=apa"
@@ -409,9 +400,7 @@ class TestRateLimiting:
 class TestAuthIsolation:
     """Internal endpoints still require auth, even in full mode."""
 
-    def test_internal_endpoint_requires_auth(
-        self, full_client: TestClient
-    ) -> None:
+    def test_internal_endpoint_requires_auth(self, full_client: TestClient) -> None:
         """GET /api/v1/doi/{doi} without auth → 401."""
         resp = full_client.get("/api/v1/doi/10.ronzz/some-doi")
         assert resp.status_code == 401, resp.text
@@ -424,9 +413,7 @@ class TestAuthIsolation:
         resp = full_client.get(f"/public/v1/doi/{book['doi']}")
         assert resp.status_code == 200, resp.text
 
-    def test_internal_health_no_auth(
-        self, full_client: TestClient
-    ) -> None:
+    def test_internal_health_no_auth(self, full_client: TestClient) -> None:
         """Internal health endpoint also works without auth (no auth dep)."""
         resp = full_client.get("/api/health")
         assert resp.status_code == 200, resp.text
@@ -454,9 +441,7 @@ class TestAuthIsolation:
 class TestPublicOnlyMode:
     """When running in ``public`` mode, internal endpoints are unavailable."""
 
-    def test_internal_endpoint_not_found(
-        self, public_client: TestClient
-    ) -> None:
+    def test_internal_endpoint_not_found(self, public_client: TestClient) -> None:
         """Internal endpoints return 404 in public mode."""
         resp = public_client.get("/api/v1/doi/10.ronzz/test")
         assert resp.status_code == 404, resp.text
@@ -476,9 +461,7 @@ class TestPublicOnlyMode:
         )
         assert resp.status_code == 404, resp.text
 
-    def test_internal_health_not_found(
-        self, public_client: TestClient
-    ) -> None:
+    def test_internal_health_not_found(self, public_client: TestClient) -> None:
         """Internal health endpoint is 404 in public mode."""
         resp = public_client.get("/api/health")
         assert resp.status_code == 404, resp.text

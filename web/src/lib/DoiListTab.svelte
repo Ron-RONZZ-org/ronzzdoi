@@ -1,9 +1,15 @@
 <script>
-  /** DOI list tab — single-line rows with selection, delete, inline search.
+  /** DOI/snippet list tab — single-line rows with selection, delete, inline search.
    *
    * Props:
-   *   data — response data from !doi search { results: [...], total, query }
+   *   data — response data from !doi search / !snippet search
+   *          { results: [...], total, query }
    *   tabId — tab identifier
+   *   mode — "doi" (default) or "snippet" (restricted rendering)
+   *
+   * In snippet mode the badge shows content_kind (text/code/math), clicking
+   * a row opens the snippet view tab (!snippet view), and delete/new target
+   * the snippet command/assign-form respectively.
    */
 
   import { tabStore } from "@lightercore/ui/tabStore.svelte.js";
@@ -17,7 +23,8 @@
   import { resolveUrl } from "./api.js";
   import { titleToFormValue } from "./doiForm.js";
 
-  let { data: _data = {}, tabId } = $props();
+  let { data: _data = {}, tabId, mode = "doi" } = $props();
+  let isSnippet = $derived(mode === "snippet");
 
   // Items — local writable copy so deleted items can be removed.
   // Syncs from the data prop reactively via $effect (avoid $state()
@@ -88,10 +95,47 @@
 
   let uuidCopy = createCopyState();
 
-  // ── Open detail tab ────────────────────────────────────────────
+  // ── Open detail/view tab ───────────────────────────────────────────
   async function openDetail(doi) {
     if (!doi) return;
     const apiKey = localStorage.getItem("ronzzdoi_api_key") || "";
+
+    // Snippet mode: open the snippet view tab via !snippet view.
+    if (isSnippet) {
+      try {
+        const resp = await fetch("/api/v1/command", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+          },
+          body: JSON.stringify({
+            tokens: ["snippet", "view", doi],
+            flags: {},
+            raw_input: `!snippet view ${doi}`,
+          }),
+        });
+        const result = await resp.json();
+        if (result.type === "error") {
+          banner.show(result.data?.message || "View failed", "error", 5000);
+          return;
+        }
+        const idKey = deriveIdKey("snippet", result.data, ["snippet", "view"], {});
+        tabStore.open("snippet", result.title || "Snippet: " + doi, result.data, {
+          idKey: idKey || `snippet-${doi}`,
+        });
+        return;
+      } catch {
+        const item = items.find((it) => (it.doi || it.id) === doi);
+        if (item) {
+          tabStore.open("snippet", "Snippet: " + doi, item, {
+            idKey: `snippet-${doi}`,
+          });
+        }
+        return;
+      }
+    }
+
     try {
       const resp = await fetch("/api/v1/command", {
         method: "POST",
@@ -147,6 +191,7 @@
 
   async function executeTombstone(doi) {
     const apiKey = localStorage.getItem("ronzzdoi_api_key") || "";
+    const cmd = isSnippet ? ["snippet", "delete", doi] : ["doi", "delete", doi];
     const resp = await fetch("/api/v1/command", {
       method: "POST",
       headers: {
@@ -154,9 +199,9 @@
         ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
       },
       body: JSON.stringify({
-        tokens: ["doi", "delete", doi],
+        tokens: cmd,
         flags: {},
-        raw_input: `!doi delete ${doi}`,
+        raw_input: `!${cmd.join(" ")}`,
       }),
     });
     const result = await resp.json();
@@ -167,11 +212,12 @@
 
   async function handleConfirmDelete() {
     confirmDelete = false;
+    const label = isSnippet ? "snippet" : "DOI";
     try {
       if (deleteTarget) {
         // Single delete (normal mode)
         await executeTombstone(deleteTarget);
-        banner.show("DOI tombstoned: " + deleteTarget, "success");
+        banner.show(`${label} tombstoned: ${deleteTarget}`, "success");
         // Remove from local list
         items = items.filter((it) => (it.doi || it.id) !== deleteTarget);
         if (items.length === 0 && tabId) {
@@ -193,7 +239,7 @@
         items = items.filter((it) => !succeeded.includes(it.doi || it.id));
         if (succeeded.length > 0) {
           banner.show(
-            `Deleted ${succeeded.length} DOI${succeeded.length !== 1 ? "s" : ""}`,
+            `Deleted ${succeeded.length} ${label}${succeeded.length !== 1 ? "s" : ""}`,
             "success",
           );
         }
@@ -210,8 +256,15 @@
     deleteTarget = null;
   }
 
-  // ── New DOI ────────────────────────────────────────────────────
+  // ── New DOI / snippet ───────────────────────────────────────────────
   function handleNew() {
+    if (isSnippet) {
+      tabStore.open("form", "Add Snippet", {
+        form: "snippet-add",
+        initialData: {},
+      }, { idKey: "form-snippet-add" });
+      return;
+    }
     tabStore.open("form", "Assign DOI", {
       form: "doi-assign",
       initialData: {},
@@ -371,6 +424,17 @@
   function typeBadge(doiType) {
     return TYPE_BADGES[doiType] || doiType || "external";
   }
+
+  // ── Snippet kind badge (snippet mode) ────────────────────────────────
+  const KIND_BADGES = {
+    text: "❝ text",
+    code: "⌨ code",
+    math: "∑ math",
+  };
+
+  function kindBadge(kind) {
+    return KIND_BADGES[kind] || kind || "text";
+  }
 </script>
 
 <svelte:window onkeydown={handleWindowKeydown} />
@@ -406,10 +470,10 @@
         class="btn-small danger"
         onclick={requestDeleteBatch}
         disabled={sel.numSelected === 0}
-        title="Delete selected DOIs">Delete</button
+        title={isSnippet ? "Delete selected snippets" : "Delete selected DOIs"}>Delete</button
       >
     {:else}
-      <button class="btn-small" onclick={handleNew} title="New DOI (N)">+ New</button>
+      <button class="btn-small" onclick={handleNew} title={isSnippet ? "New snippet (N)" : "New DOI (N)"}>+ New</button>
       <button
         class="btn-small"
         title="Toggle search (/)"
@@ -430,7 +494,7 @@
   <div
     class="list"
     role="listbox"
-    aria-label="DOIs"
+    aria-label={isSnippet ? "Snippets" : "DOIs"}
     aria-multiselectable={sel.selectionMode}
   >
     {#each filteredItems as item, i (item.doi || item.id)}
@@ -462,7 +526,11 @@
           >{titleToFormValue(item.title) || "(untitled)"}</span
         >
         <span class="badge-col">
-          <span class="doi-type-badge">{typeBadge(item.doi_type)}</span>
+          {#if isSnippet}
+            <span class="doi-type-badge">{kindBadge(item.content_kind)}</span>
+          {:else}
+            <span class="doi-type-badge">{typeBadge(item.doi_type)}</span>
+          {/if}
         </span>
         <span class="actions-col">
           <button
@@ -495,7 +563,7 @@
         </span>
       </div>
     {:else}
-      <p class="empty">No DOIs found.</p>
+      <p class="empty">{isSnippet ? "No snippets found." : "No DOIs found."}</p>
     {/each}
   </div>
 
@@ -510,8 +578,8 @@
 {#if confirmDelete}
   <ConfirmDialog
     message={deleteTarget
-      ? `Tombstone DOI "${deleteTarget}"? This action cannot be undone.`
-      : `Delete ${sel.numSelected} DOI${sel.numSelected !== 1 ? "s" : ""}?`}
+      ? `Tombstone ${isSnippet ? "snippet" : "DOI"} "${deleteTarget}"? This action cannot be undone.`
+      : `Delete ${sel.numSelected} ${isSnippet ? "snippet" : "DOI"}${sel.numSelected !== 1 ? "s" : ""}?`}
     onSubmit={handleConfirmDelete}
     onDismiss={handleCancelDelete}
   />

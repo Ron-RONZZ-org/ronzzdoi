@@ -106,8 +106,10 @@
         return ["doi", "assign"];
       case "doi-modify":
         return ["doi", "modify"];
-      case "snippet-assign":
-        return ["snippet", "assign"];
+      case "snippet-add":
+        return ["snippet", "add"];
+      case "snippet-edit":
+        return ["snippet", "modify"];
       case "auth-key-create":
         return ["auth", "api_key", "create"];
       case "auth-key-update":
@@ -282,7 +284,8 @@
   let displayTitle = $derived(
     formType === "doi-assign" ? "Assign DOI"
       : formType === "doi-modify" ? "Modify DOI"
-      : formType === "snippet-assign" ? "Assign Snippet"
+      : formType === "snippet-add" ? "Add Snippet"
+      : formType === "snippet-edit" ? "Edit Snippet"
       : formType === "auth-key-create" ? "Create API Key"
       : formType === "auth-key-update" ? "Update API Key"
       : formType === "auth-key-delete" ? "Delete API Key"

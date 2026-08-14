@@ -6,7 +6,7 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY, HTTP_501_NOT_IMPLEMENTED
+from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from ronzzdoi.db.service import DOIService
 from ronzzdoi.server.auth_middleware import require_permission
@@ -37,8 +37,7 @@ def _get_search_svc() -> DOIService:
     """Return the module-level search service or raise."""
     if _search_svc is None:
         raise RuntimeError(
-            "search_routes not initialised. "
-            "Call mount_search_routes() during startup."
+            "search_routes not initialised. Call mount_search_routes() during startup."
         )
     return _search_svc
 
@@ -88,16 +87,18 @@ async def search(
     items = []
     for r in results:
         meta = r.get("metadata", json.loads(r.get("metadata_json", "{}")))
-        items.append({
-            "doi": r["doi"],
-            "target_url": r.get("target_url"),
-            "title": r.get("title", ""),
-            "doi_type": r.get("doi_type", "external"),
-            "metadata": meta,
-            "created_at": r["created_at"],
-            "updated_at": r["updated_at"],
-            "deleted_at": r.get("deleted_at"),
-        })
+        items.append(
+            {
+                "doi": r["doi"],
+                "target_url": r.get("target_url"),
+                "title": r.get("title", ""),
+                "doi_type": r.get("doi_type", "external"),
+                "metadata": meta,
+                "created_at": r["created_at"],
+                "updated_at": r["updated_at"],
+                "deleted_at": r.get("deleted_at"),
+            }
+        )
 
     return {
         "items": items,

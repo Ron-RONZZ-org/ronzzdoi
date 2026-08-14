@@ -114,10 +114,10 @@ ronzzdoi --help               # show top-level usage
 ronzzdoi doi search
 ronzzdoi doi search quantum   # matches seeded "Quantum Computing" webpage
 ronzzdoi doi assign https://example.com --title "My Example" --type external
-ronzzdoi snippet assign --type text --content "To be, or not to be…" \
+ronzzdoi snippet add --type text --content "To be, or not to be…" \
     --source-doi 10.ronzz/<book> --page-start "Act 3"   # embeddable snippet
-ronzzdoi snippet assign --type code --content "print('hi')" --language python
-ronzzdoi snippet resolve 10.ronzz/<snippet>
+ronzzdoi snippet add --type code --content "print('hi')" --language python
+ronzzdoi snippet view 10.ronzz/<snippet>
 ronzzdoi snippet embed 10.ronzz/<snippet>   # prints a copy-paste <iframe> tag
 ronzzdoi auth api_key list
 ronzzdoi auth api_key create --name "CI key" --permission edit --owner "CI pipeline"
@@ -159,7 +159,7 @@ ronzzdoi citation show 10.ronzz/<suffix> --style apa
 export RONZZDOI_SERVER=https://doi-admin.ronzz.org
 export RONZZDOI_API_KEY="la_a_abc123..."
 ronzzdoi doi assign https://example.com --title "My Book" --type book
-ronzzdoi snippet assign --type text --content "To be, or not to be…" \
+ronzzdoi snippet add --type text --content "To be, or not to be…" \
     --source-doi 10.ronzz/<book> --page-start "Act 3"
 ronzzdoi snippet embed 10.ronzz/<snippet>   # prints the <iframe> tag
 ```
@@ -187,7 +187,7 @@ remote **write** API directly (no tunnel needed):
 ```bash
 cd web
 RONZZDOI_API_URL=https://doi-admin.ronzz.org npm run dev
-# open http://127.0.0.1:6025, paste your API key, type !snippet assign …
+# open http://127.0.0.1:6025, paste your API key, type !snippet add …
 ```
 
 Or use an SSH tunnel against the server's loopback internal API:

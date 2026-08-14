@@ -40,7 +40,9 @@ class CommandResponse(BaseModel):
     - ``"confirm"``: render as a confirmation dialog.
     """
 
-    type: str = Field(..., description="Display type: list, detail, form, error, success, confirm")
+    type: str = Field(
+        ..., description="Display type: list, detail, form, error, success, confirm"
+    )
     title: str = Field(..., description="Tab title")
     data: Any = Field(default=None, description="Display data (dict, list, or null)")
     # NOTE: id_key is NOT returned by the backend — it is derived on the frontend
