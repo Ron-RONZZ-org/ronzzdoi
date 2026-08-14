@@ -150,7 +150,7 @@ get autocomplete automatically from the registered `@command` decorators.
 - `tests/test_snippet_routes.py` — HTTP routes, permissions, public endpoint
 - `tests/test_cli_snippet.py` — CLI embed/assign/resolve (MockTransport)
 - `tests/test_db.py::TestSchema` — snippets table/triggers/indexes + CHECK
-- `tests/e2e_gui_smoke.mjs` — GUI toggle, snippet tab, Copy Embed clipboard
+- `web/e2e_gui_smoke.mjs` — GUI toggle, snippet tab, Copy Embed clipboard
 
 Run: `./scripts/test.sh tests/test_snippet_service.py tests/test_snippet_routes.py tests/test_cli_snippet.py -v`
 

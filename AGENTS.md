@@ -142,8 +142,8 @@ ronzzdoi/
 │   ├── test_db.py               # DB module + schema tests
 │   ├── test_snippet_service.py  # Snippet service + unified search tests
 │   ├── test_snippet_routes.py   # Snippet API endpoint tests
-│   └── e2e_gui_smoke.mjs        # Playwright E2E smoke test
 └── web/                         # Svelte 5 SPA frontend
+    ├── e2e_gui_smoke.mjs        # Playwright E2E smoke test (npm run test:e2e)
     └── src/
         ├── lib/
         │   ├── __tests__/       # Vitest component tests
@@ -232,11 +232,11 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 |--------|-----------|
 | Backend framework | pytest |
 | Frontend framework | vitest |
-| E2E framework | Playwright (.mjs in tests/) |
+| E2E framework | Playwright (.mjs in web/) |
 | Run all backend tests | `uv run pytest tests/` |
 | Run single test file | `uv run pytest tests/test_foo.py -v` |
 | Run frontend tests | `cd web && npm run test` |
-| Run E2E smoke test | `node tests/e2e_gui_smoke.mjs` (servers must be running) |
+| Run E2E smoke test | `cd web && npm run test:e2e` (servers must be running) |
 | Test directory (backend) | `tests/` |
 | Test directory (frontend) | `web/src/lib/__tests__/` |
 
@@ -284,7 +284,7 @@ PYTHONPATH=src /path/to/main/checkout/.venv/bin/python -m pytest tests/...
 |-------|-------|------|
 | Backend pytest | 448 | All `tests/test_*.py` |
 | Frontend vitest | 62 | `web/src/lib/__tests__/*.test.js` |
-| E2E Playwright | 1 suite | `tests/e2e_gui_smoke.mjs` |
+| E2E Playwright | 1 suite | `web/e2e_gui_smoke.mjs` |
 
 ### E2E GUI smoke test invocation
 
@@ -358,7 +358,7 @@ ronzzdoi-public-web).
 
 The E2E job starts `ronzzdoi-dev --data-dir /tmp/ronzzdoi-ci --seed` +
 `npm run dev`, captures the seeded admin key from the backend log, and runs
-`tests/e2e_gui_smoke.mjs`. Logs are uploaded as an artifact on failure.
+`web/e2e_gui_smoke.mjs`. Logs are uploaded as an artifact on failure.
 
 ### Ruff hooks in git worktrees
 

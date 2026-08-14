@@ -10,7 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:build": "node ../tests/build_smoke.mjs",
-    "test:e2e": "node ../tests/e2e_gui_smoke.mjs"
+    "test:e2e": "node e2e_gui_smoke.mjs"
   },
   "devDependencies": {
     "@lightercore/ui": "file:../../lightercore/web",
