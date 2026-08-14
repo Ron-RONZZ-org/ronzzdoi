@@ -118,6 +118,7 @@ jobs:
           echo "backend=$BACKEND_PID frontend=$FRONTEND_PID" > /tmp/pids.txt
           echo "API_KEY=$API_KEY" > /tmp/apikey.txt
       - name: Run E2E smoke test
+        working-directory: web
         run: |
           set -e
           API_KEY=$(grep 'API_KEY=' /tmp/apikey.txt | cut -d= -f2)
@@ -126,7 +127,7 @@ jobs:
           RONZZDOI_API_KEY="$API_KEY" \
           FRONTEND_URL=http://127.0.0.1:6025 \
           CHROME_PATH="$CHROME_PATH" \
-          node tests/e2e_gui_smoke.mjs
+          npm run test:e2e
       - name: Upload logs on failure
         if: failure()
         uses: actions/upload-artifact@v4

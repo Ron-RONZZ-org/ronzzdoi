@@ -289,13 +289,15 @@ PYTHONPATH=src /path/to/main/checkout/.venv/bin/python -m pytest tests/...
 ### E2E GUI smoke test invocation
 
 Requires both servers running (backend + `cd web && npm run dev`) and a
-Playwright chromium binary:
+Playwright chromium binary.  Run from `web/` (playwright is a `web/`
+devDependency, so the script must resolve it from `web/node_modules`):
 
 ```bash
+cd web
 CHROME_PATH=<chromium binary> \
 RONZZDOI_API_KEY=<admin key from ronzzdoi-dev --seed> \
 FRONTEND_URL=http://127.0.0.1:6025 \
-node tests/e2e_gui_smoke.mjs
+npm run test:e2e
 ```
 
 Without `RONZZDOI_API_KEY` the authenticated flows (citation, assign form,
