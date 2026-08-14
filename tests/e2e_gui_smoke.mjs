@@ -424,29 +424,167 @@ async function runTests() {
       await page.locator(".metadata-table").waitFor({ state: "visible", timeout: 4000 });
     }
 
-    await test("Assign form: DOI type autocomplete + plain title input (#36)", async () => {
+    await test("Assign form: DOI type autocomplete opens on focus (#36, #48)", async () => {
       await typeCommand("!doi assign");
       await pressEnter();
       await assertTabOpened("Assign");
 
       const typeInput = page.locator("#doi_type");
       await typeInput.waitFor({ state: "visible", timeout: 3000 });
+
+      // The type field is a custom combobox, not a native <datalist> (#48.2).
       const listId = await typeInput.getAttribute("list");
-      assert(listId, "DOI type input should reference a datalist for autocomplete");
-      const optionCount = await page.locator(`#${listId} option`).count();
+      assert(listId === null, "DOI type input should NOT use a datalist");
+
+      // Dropdown opens on focus (single click) and lists the types.
+      await typeInput.click();
+      await sleep(250);
+      const dropdown = page.locator(".autocomplete-dropdown");
+      await dropdown.waitFor({ state: "visible", timeout: 3000 });
+      const optionCount = await page.locator(".autocomplete-item").count();
       assert(optionCount >= 5,
-        `Type datalist should offer many types, found ${optionCount}`);
+        `Type dropdown should offer many types, found ${optionCount}`);
+
+      // Typing filters the options.
+      await typeInput.fill("film");
+      await sleep(200);
+      const filtered = await page.locator(".autocomplete-item").allTextContents();
+      assert(filtered.every((t) => t.includes("film")),
+        `Typing 'film' should filter options, got: ${filtered.join(", ")}`);
 
       const titleTag = await page.locator("#title").evaluate((el) => el.tagName);
       assert(titleTag === "INPUT",
         `Title should be a plain text input, got <${titleTag.toLowerCase()}>`);
 
       // Selecting a type with a schema reveals type-specific fields.
-      await typeInput.fill("book");
-      await sleep(200);
+      await page.locator(".autocomplete-item", { hasText: "film" }).first().click();
+      await sleep(250);
       const metaFields = await page.locator('.form-field input[type="text"], .form-field textarea').count();
       assert(metaFields >= 4,
-        `book type should reveal schema fields, found ${metaFields} inputs`);
+        `film type should reveal schema fields, found ${metaFields} inputs`);
+    });
+
+    await test("Assign form: Target URL optional, no raw Metadata JSON field (#48.1, #48.3)", async () => {
+      await typeCommand("!doi assign");
+      await pressEnter();
+      await assertTabOpened("Assign");
+
+      // Target URL must not be required (entity DOIs have no URL).
+      const urlField = page.locator(".form-field", { hasText: "Target URL" }).first();
+      const urlRequiredStar = await urlField.locator(".required-star").count();
+      assert(urlRequiredStar === 0,
+        "Target URL must not show a required marker");
+
+      // No raw JSON textarea before a type is selected.
+      const jsonField = page.locator(".form-field", { hasText: "Metadata (JSON)" });
+      assert((await jsonField.count()) === 0,
+        "Metadata (JSON) field must not be shown");
+
+      // Submitting with only a title + entity type assigns without URL.
+      await page.locator("#title").fill("Entity Test DOI");
+      await page.locator("#doi_type").click();
+      await sleep(200);
+      await page.locator(".autocomplete-item", { hasText: "person" }).first().click();
+      await sleep(200);
+      await page.locator('button[type="submit"]').click();
+      await sleep(900);
+      await assertTabOpened("DOI");
+      const detailText = (await page.locator(".detail, .doi-list, main").first().textContent() || "");
+      assert(detailText.includes("Entity Test DOI"),
+        `Assigned entity DOI should show its title, got: "${detailText.trim().slice(0, 200)}"`);
+    });
+
+    await test("Assign form: pure-text fields offer translations (#47.1)", async () => {
+      await typeCommand("!doi assign");
+      await pressEnter();
+      await assertTabOpened("Assign");
+
+      // The base title field has a primary-language input + translations.
+      const titleField = page.locator(".form-field", { hasText: /^Title/ }).first();
+      const titleI18n = await titleField.locator(".i18n-toggle").count();
+      assert(titleI18n === 1,
+        "Title field should offer translations");
+      const primaryDefault = await titleField.locator(".i18n-primary").inputValue();
+      assert(primaryDefault === "en",
+        `Primary language should default to en, got "${primaryDefault}"`);
+
+      // Selecting a type with a pure-text schema field reveals per-field
+      // translation buttons (e.g. film's studio).
+      await page.locator("#doi_type").click();
+      await sleep(200);
+      await page.locator(".autocomplete-item", { hasText: "film" }).first().click();
+      await sleep(250);
+      const studioField = page.locator(".form-field", { hasText: "Studio" }).first();
+      await studioField.waitFor({ state: "visible", timeout: 3000 });
+      const studioI18n = await studioField.locator(".i18n-toggle").count();
+      assert(studioI18n === 1,
+        "Pure-text metadata fields (e.g. Studio) should offer translations");
+
+      // Setting a non-en primary language works (e.g. fr for a song).
+      await studioField.locator(".i18n-primary").fill("fr");
+      await sleep(100);
+      assert((await studioField.locator(".i18n-primary").inputValue()) === "fr",
+        "Primary language should be settable to a non-en language");
+
+      // Adding a translation row works.
+      await studioField.locator(".i18n-toggle").click();
+      await sleep(150);
+      await studioField.locator(".btn-small", { hasText: "Add language" }).click();
+      await sleep(150);
+      await studioField.locator(".i18n-lang").fill("en");
+      await studioField.locator(".i18n-text").fill("Studio EN");
+      await sleep(100);
+      const rows = await studioField.locator(".i18n-row").count();
+      assert(rows === 1, `Expected 1 translation row, found ${rows}`);
+    });
+
+    await test("Snippet assign form: title offers translations (#47.2)", async () => {
+      await typeCommand("!snippet assign");
+      await pressEnter();
+      await assertTabOpened("Assign");
+
+      const titleField = page.locator(".form-field", { hasText: /^Title/ }).first();
+      await titleField.waitFor({ state: "visible", timeout: 3000 });
+      const i18n = await titleField.locator(".i18n-toggle").count();
+      assert(i18n === 1,
+        "Snippet title field should offer translations");
+    });
+
+    await test("Tombstone: confirmation dialog confirms and tombstones (#46)", async () => {
+      // Assign a throwaway DOI, then tombstone it from the detail view.
+      await typeCommand("!doi assign");
+      await pressEnter();
+      await assertTabOpened("Assign");
+      await page.locator("#title").fill("Tombstone Target");
+      await page.locator("#doi_type").click();
+      await sleep(200);
+      await page.locator(".autocomplete-item", { hasText: "webpage" }).first().click();
+      await sleep(200);
+      await page.locator("#url").fill("https://example.com/tombstone");
+      await page.locator('button[type="submit"]').click();
+      await sleep(900);
+      await assertTabOpened("DOI");
+
+      // Detail view shows the Tombstone button.
+      const tombBtn = page.locator('button', { hasText: "Tombstone" });
+      await tombBtn.waitFor({ state: "visible", timeout: 3000 });
+
+      // Open the confirm dialog and click Confirm — the DOI must be tombstoned.
+      await tombBtn.click();
+      await sleep(300);
+      const dialog = page.locator('[role="alertdialog"]');
+      await dialog.waitFor({ state: "visible", timeout: 3000 });
+      const confirmBtn = dialog.locator('button', { hasText: "Confirm" });
+      await confirmBtn.click();
+      await sleep(900);
+
+      // The DOI is gone from search results.
+      await typeCommand("!doi search Tombstone Target");
+      await pressEnter();
+      await assertTabOpened("DOI");
+      const listText = (await page.locator(".doi-list").textContent() || "");
+      assert(!listText.includes("Tombstone Target"),
+        `Tombstoned DOI must not appear in search results, got: "${listText.trim().slice(0, 200)}"`);
     });
 
     await test("DOI detail: metadata renders as table, no raw JSON (#37)", async () => {
