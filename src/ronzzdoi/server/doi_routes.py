@@ -280,9 +280,15 @@ async def doi_types(
 
     Used by the GUI assign/modify form to render a type dropdown
     (autocomplete) and type-specific metadata inputs.  The citation
-    module's ``DOC_TYPE_SCHEMAS`` is the source of truth.
+    module's ``DOC_TYPE_SCHEMAS`` and ``ENTITY_SCHEMAS`` are the source
+    of truth.
     """
-    from ronzzdoi.citation.schemas import DOC_TYPE_SCHEMAS, DOC_TYPES, ENTITY_TYPES
+    from ronzzdoi.citation.schemas import (
+        DOC_TYPE_SCHEMAS,
+        DOC_TYPES,
+        ENTITY_SCHEMAS,
+        ENTITY_TYPES,
+    )
 
     return {
         "types": ["external", *DOC_TYPES, *ENTITY_TYPES],
@@ -296,7 +302,7 @@ async def doi_types(
                 }
                 for field_name, field_def in schema.items()
             ]
-            for name, schema in DOC_TYPE_SCHEMAS.items()
+            for name, schema in {**DOC_TYPE_SCHEMAS, **ENTITY_SCHEMAS}.items()
         },
     }
 

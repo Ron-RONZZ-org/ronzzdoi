@@ -10,11 +10,15 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ronzzdoi.doi.exceptions import DOIAmbiguousError, DOIExistsError, DOIInvalidError, DOINotFoundError
+from ronzzdoi.doi.exceptions import (
+    DOIAmbiguousError,
+    DOIExistsError,
+    DOIInvalidError,
+    DOINotFoundError,
+)
 from ronzzdoi.server.command.handlers import check_permission
 from ronzzdoi.server.command.registry import command
 from ronzzdoi.server.doi_routes import _get_doi_svc, _record_to_response, _search_svc
-
 
 # ── doi.assign ──────────────────────────────────────────────────────────
 
@@ -30,8 +34,11 @@ def doi_assign(
     Usage::
 
         !doi assign <url> [--title '{"en":"..."}' --type external --metadata '{}']
+        !doi assign --title '{"en":"..."}' --type person   (no URL — entity DOIs)
 
-    Missing required params → returns ``form`` response.
+    The URL is optional — entity DOIs (person, abstract_entity, country)
+    are assigned without one.  A bare ``!doi assign`` (no args at all)
+    returns the interactive ``form`` response.
     """
     perm = check_permission(user, "edit")
     if perm:
@@ -39,7 +46,7 @@ def doi_assign(
 
     # URL from positional arg or --url flag
     url = positionals[0] if positionals else flags.get("url", "")
-    if not url:
+    if not url and not flags:
         return {
             "type": "form",
             "title": "Assign DOI",
@@ -70,7 +77,7 @@ def doi_assign(
     try:
         svc = _get_doi_svc()
         result = svc.assign(
-            target_url=url,
+            target_url=url or None,
             doi_type=doi_type,
             title=title,
             metadata=metadata,
@@ -118,7 +125,11 @@ def doi_resolve(
         svc = _get_doi_svc()
         record = svc.resolve(doi, include_redirects=True)
     except DOIAmbiguousError as exc:
-        return {"type": "error", "title": "Ambiguous DOI", "data": {"message": str(exc)}}
+        return {
+            "type": "error",
+            "title": "Ambiguous DOI",
+            "data": {"message": str(exc)},
+        }
 
     if record is None:
         return {
@@ -190,7 +201,11 @@ def doi_modify(
     except DOINotFoundError as exc:
         return {"type": "error", "title": "Not Found", "data": {"message": str(exc)}}
     except DOIAmbiguousError as exc:
-        return {"type": "error", "title": "Ambiguous DOI", "data": {"message": str(exc)}}
+        return {
+            "type": "error",
+            "title": "Ambiguous DOI",
+            "data": {"message": str(exc)},
+        }
 
     return {
         "type": "detail",
@@ -234,7 +249,11 @@ def doi_merge(
     except DOINotFoundError as exc:
         return {"type": "error", "title": "Not Found", "data": {"message": str(exc)}}
     except DOIAmbiguousError as exc:
-        return {"type": "error", "title": "Ambiguous DOI", "data": {"message": str(exc)}}
+        return {
+            "type": "error",
+            "title": "Ambiguous DOI",
+            "data": {"message": str(exc)},
+        }
 
     return {
         "type": "detail",
@@ -274,7 +293,11 @@ def doi_delete(
         svc = _get_doi_svc()
         deleted = svc.delete_doi(doi)
     except DOIAmbiguousError as exc:
-        return {"type": "error", "title": "Ambiguous DOI", "data": {"message": str(exc)}}
+        return {
+            "type": "error",
+            "title": "Ambiguous DOI",
+            "data": {"message": str(exc)},
+        }
 
     if not deleted:
         return {
@@ -324,7 +347,8 @@ def doi_search(
             all_dois = svc.list_dois(limit=1000)
             q_lower = query.lower()
             results = [
-                r for r in all_dois
+                r
+                for r in all_dois
                 if q_lower in r.get("doi", "").lower()
                 or q_lower in r.get("title", "").lower()
             ][:limit]

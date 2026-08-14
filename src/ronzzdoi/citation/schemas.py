@@ -15,9 +15,8 @@ Usage::
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
-
 
 # ── Field definition ────────────────────────────────────────────────────────
 
@@ -67,6 +66,35 @@ ENTITY_TYPES: list[str] = [
     "abstract_entity",
     "country",
 ]
+
+
+# ── Entity-type field schemas ──────────────────────────────────────────────
+
+# Entity DOIs have no citation-required fields (validate_metadata always
+# accepts them), but the GUI types catalog needs guided metadata inputs —
+# these schemas power the assign/modify form fields for entity types.
+# Keys intentionally mirror the fields the citation formatter reads.
+
+ENTITY_SCHEMAS: dict[str, dict[str, FieldDef]] = {
+    "person": {
+        "first_name": FieldDef(required=False, types=(str,), description="Given name"),
+        "last_name": FieldDef(required=False, types=(str,), description="Family name"),
+        "orcid": FieldDef(
+            required=False, types=(str,), description="ORCID iD (0000-…-…-…-…)"
+        ),
+    },
+    "abstract_entity": {
+        "legal_name": FieldDef(
+            required=False, types=(str,), description="Legal/registered name"
+        ),
+    },
+    "country": {
+        "iso_code": FieldDef(
+            required=False, types=(str,), description="ISO 3166-1 alpha-2 code"
+        ),
+        "name": FieldDef(required=False, types=(str,), description="Country name"),
+    },
+}
 
 
 # ── Doc-type field schemas ──────────────────────────────────────────────────
