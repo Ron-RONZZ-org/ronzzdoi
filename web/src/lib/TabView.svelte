@@ -191,9 +191,11 @@
         {:else if tab.type === "list"}
           <ListTab data={tab.data} tabId={tab.id} />
         {:else if tab.type === "doi-list"}
-          <DoiListTab data={tab.data} tabId={tab.id} />
+          <DoiListTab data={tab.data} tabId={tab.id} mode="doi" />
+        {:else if tab.type === "snippet-list"}
+          <DoiListTab data={tab.data} tabId={tab.id} mode="snippet" />
         {:else if tab.type === "snippet"}
-          <SnippetTab data={tab.data} />
+          <SnippetTab data={tab.data} tabId={tab.id} />
         {:else if tab.type === "status"}
           <StatusPopup data={tab.data} />
         {:else if tab.type === "error"}

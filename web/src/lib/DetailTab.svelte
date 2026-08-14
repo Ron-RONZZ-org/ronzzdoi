@@ -520,7 +520,7 @@
 {#if confirmDelete}
   <ConfirmDialog
     message={`Tombstone "${d.doi}"? This action cannot be undone.`}
-    onConfirm={executeTombstone}
+    onSubmit={executeTombstone}
     onDismiss={cancelTombstone}
   />
 {/if}

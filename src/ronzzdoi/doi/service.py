@@ -420,6 +420,7 @@ class DOIService(CRUDService):
         offset: int = 0,
         *,
         include_deleted: bool = False,
+        doi_type: str | None = None,
     ) -> list[dict[str, Any]]:
         """List DOI records with pagination.
 
@@ -429,20 +430,26 @@ class DOIService(CRUDService):
             limit: Maximum number of records (default 100).
             offset: Number of records to skip (default 0).
             include_deleted: If True, also return tombstoned DOIs.
+            doi_type: If set, only return records of this type (e.g.
+                ``"snippet"`` for a type-restricted listing).
 
         Returns:
             List of DOI record dicts.  The ``metadata_json`` field is kept
             as a raw string; callers should deserialize if needed.
         """
-        if include_deleted:
-            return self.db.execute(
-                f"SELECT * FROM {self.table} ORDER BY created_at DESC LIMIT ? OFFSET ?",
-                (limit, offset),
-            )
+        clauses = []
+        params: list[Any] = []
+        if not include_deleted:
+            clauses.append("deleted_at IS NULL")
+        if doi_type:
+            clauses.append("doi_type = ?")
+            params.append(doi_type)
+        where = f"WHERE {' AND '.join(clauses)} " if clauses else ""
+        params.extend([limit, offset])
         return self.db.execute(
-            f"SELECT * FROM {self.table} WHERE deleted_at IS NULL "
+            f"SELECT * FROM {self.table} {where}"
             f"ORDER BY created_at DESC LIMIT ? OFFSET ?",
-            (limit, offset),
+            tuple(params),
         )
 
     # ── Internal helpers ────────────────────────────────────────────────────

@@ -270,6 +270,26 @@ class SnippetService:
 
     # ── Internal helpers ────────────────────────────────────────────────────
 
+    def enrich(self, record: dict[str, Any]) -> dict[str, Any]:
+        """Attach snippet content fields to a resolved DOI record.
+
+        Records returned by DOI listing/search carry no snippet content;
+        this merges the ``snippets`` row when the record is a snippet
+        (determined by ``doi_type == 'snippet'``).  Non-snippet records
+        are returned unchanged.
+
+        Args:
+            record: A DOI record dict from :class:`DOIService`.
+
+        Returns:
+            The record with ``content_kind``/``content``/``language``/
+            ``source_doi``/``page_start``/``page_end`` merged when the
+            DOI is a snippet.
+        """
+        if record.get("doi_type") != "snippet":
+            return record
+        return self._merge_snippet_row(record)
+
     def _validate_source(self, source_doi: str) -> str:
         """Return *source_doi* if it references an active DOI.
 

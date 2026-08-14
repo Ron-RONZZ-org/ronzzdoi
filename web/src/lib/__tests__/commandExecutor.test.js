@@ -17,6 +17,16 @@ describe("deriveIdKey", () => {
     expect(key).toBe("doi-list-search-test-semantical");
   });
 
+  it("derives idKey for snippet search list", () => {
+    const key = deriveIdKey("snippet-list", { results: [] }, ["snippet", "search", "quote"], {});
+    expect(key).toBe("snippet-list-search-quote");
+  });
+
+  it("derives idKey for snippet view", () => {
+    const key = deriveIdKey("snippet", { doi: "10.ronzz/abc123" }, ["snippet", "view", "10.ronzz/abc123"], {});
+    expect(key).toBe("snippet-10.ronzz/abc123");
+  });
+
   it("derives idKey for auth list", () => {
     const key = deriveIdKey("list", { keys: [] }, ["auth", "api_key", "list"], {});
     expect(key).toBe("list-auth-api-key");

@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import ronzzdoi.server.doi_routes as _doi_routes
 from ronzzdoi.doi.exceptions import (
     DOIAmbiguousError,
     DOIExistsError,
@@ -18,7 +19,7 @@ from ronzzdoi.doi.exceptions import (
 )
 from ronzzdoi.server.command.handlers import check_permission
 from ronzzdoi.server.command.registry import command
-from ronzzdoi.server.doi_routes import _get_doi_svc, _record_to_response, _search_svc
+from ronzzdoi.server.doi_routes import _record_to_response
 
 # ── doi.assign ──────────────────────────────────────────────────────────
 
@@ -72,7 +73,7 @@ def doi_assign(
         }
 
     try:
-        svc = _get_doi_svc()
+        svc = _doi_routes._get_doi_svc()
         result = svc.assign(
             target_url=url,
             doi_type=doi_type,
@@ -119,7 +120,7 @@ def doi_resolve(
         }
 
     try:
-        svc = _get_doi_svc()
+        svc = _doi_routes._get_doi_svc()
         record = svc.resolve(doi, include_redirects=True)
     except DOIAmbiguousError as exc:
         return {
@@ -187,7 +188,7 @@ def doi_modify(
             }
 
     try:
-        svc = _get_doi_svc()
+        svc = _doi_routes._get_doi_svc()
         result = svc.modify(
             doi,
             target_url=target_url,
@@ -241,7 +242,7 @@ def doi_merge(
     target_doi = positionals[1]
 
     try:
-        svc = _get_doi_svc()
+        svc = _doi_routes._get_doi_svc()
         result = svc.merge_dois(source_doi, target_doi)
     except DOINotFoundError as exc:
         return {"type": "error", "title": "Not Found", "data": {"message": str(exc)}}
@@ -287,7 +288,7 @@ def doi_delete(
         }
 
     try:
-        svc = _get_doi_svc()
+        svc = _doi_routes._get_doi_svc()
         deleted = svc.delete_doi(doi)
     except DOIAmbiguousError as exc:
         return {
@@ -334,12 +335,18 @@ def doi_search(
     limit = int(flags.get("limit", "20"))
     offset = int(flags.get("offset", "0"))
 
-    svc = _get_doi_svc()
+    svc = _doi_routes._get_doi_svc()
 
     if query:
-        if _search_svc is not None:
-            results = _search_svc.search_fts(query, limit=limit)
-        else:
+        results: list[dict[str, Any]] = []
+        if _doi_routes._search_svc is not None:
+            try:
+                results = _doi_routes._search_svc.search_fts(query, limit=limit)
+            except Exception:
+                # FTS5 rejects some syntaxes (e.g. hyphens in "foo-bar" are
+                # parsed as column refs) — degrade to the LIKE fallback.
+                results = []
+        if not results:
             # Fallback: basic text filter via DOI service
             all_dois = svc.list_dois(limit=1000)
             q_lower = query.lower()
