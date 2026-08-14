@@ -27,7 +27,9 @@ def _make_args(**overrides: Any) -> Any:
 def _mock_client(handler) -> RonzzdoiClient:
     """Create a RonzzdoiClient with the given MockTransport handler."""
     transport = httpx.MockTransport(handler)
-    return RonzzdoiClient(api_key="test-admin-key", client=httpx.Client(transport=transport))
+    return RonzzdoiClient(
+        api_key="test-admin-key", client=httpx.Client(transport=transport)
+    )
 
 
 # ── create ─────────────────────────────────────────────────────────────────
@@ -40,14 +42,17 @@ def test_create_api_key(capsys: pytest.CaptureFixture) -> None:
         body = json.loads(request.content)
         assert body["name"] == "my-key"
         assert body["permission"] == "edit"
-        return httpx.Response(201, json={
-            "id": "ak_new_001",
-            "name": "my-key",
-            "key": "la_raw_secret_key_here",
-            "prefix": "la_",
-            "permission": "edit",
-            "created_at": "2026-01-01T00:00:00+00:00",
-        })
+        return httpx.Response(
+            201,
+            json={
+                "id": "ak_new_001",
+                "name": "my-key",
+                "key": "la_raw_secret_key_here",
+                "prefix": "la_",
+                "permission": "edit",
+                "created_at": "2026-01-01T00:00:00+00:00",
+            },
+        )
 
     client = _mock_client(handler)
     args = _make_args(name="my-key", permission="edit", expires_at=None)
@@ -66,7 +71,9 @@ def test_create_api_key_json(capsys: pytest.CaptureFixture) -> None:
         return httpx.Response(201, json={"id": "ak_001", "name": "json-key"})
 
     client = _mock_client(handler)
-    args = _make_args(name="json-key", permission="read_only", expires_at=None, json_output=True)
+    args = _make_args(
+        name="json-key", permission="read_only", expires_at=None, json_output=True
+    )
     _cmd_create(args, client)
     captured = capsys.readouterr()
     data = json.loads(captured.out)
@@ -80,12 +87,27 @@ def test_list_api_keys(capsys: pytest.CaptureFixture) -> None:
     """auth api_key list returns formatted table."""
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json=[
-            {"id": "ak_001", "name": "key-1", "permission": "admin", "prefix": "la_",
-             "expires_at": None, "created_at": "2026-01-01T00:00:00+00:00"},
-            {"id": "ak_002", "name": "key-2", "permission": "read_only", "prefix": "la_",
-             "expires_at": "2027-01-01T00:00:00+00:00", "created_at": "2026-06-01T00:00:00+00:00"},
-        ])
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "id": "ak_001",
+                    "name": "key-1",
+                    "permission": "admin",
+                    "prefix": "la_",
+                    "expires_at": None,
+                    "created_at": "2026-01-01T00:00:00+00:00",
+                },
+                {
+                    "id": "ak_002",
+                    "name": "key-2",
+                    "permission": "read_only",
+                    "prefix": "la_",
+                    "expires_at": "2027-01-01T00:00:00+00:00",
+                    "created_at": "2026-06-01T00:00:00+00:00",
+                },
+            ],
+        )
 
     client = _mock_client(handler)
     args = _make_args(include_expired=False)
@@ -135,11 +157,14 @@ def test_update_api_key(capsys: pytest.CaptureFixture) -> None:
         assert request.method == "PATCH"
         body = json.loads(request.content)
         assert body["name"] == "renamed"
-        return httpx.Response(200, json={
-            "id": "ak_001",
-            "name": "renamed",
-            "permission": "edit",
-        })
+        return httpx.Response(
+            200,
+            json={
+                "id": "ak_001",
+                "name": "renamed",
+                "permission": "edit",
+            },
+        )
 
     client = _mock_client(handler)
     args = _make_args(key_id="ak_001", name="renamed", permission=None, expires_at=None)
@@ -155,9 +180,14 @@ def test_update_api_key_permission(capsys: pytest.CaptureFixture) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         assert body["permission"] == "admin"
-        return httpx.Response(200, json={
-            "id": "ak_001", "name": "test", "permission": "admin",
-        })
+        return httpx.Response(
+            200,
+            json={
+                "id": "ak_001",
+                "name": "test",
+                "permission": "admin",
+            },
+        )
 
     client = _mock_client(handler)
     args = _make_args(key_id="ak_001", name=None, permission="admin", expires_at=None)

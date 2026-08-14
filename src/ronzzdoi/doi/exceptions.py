@@ -18,7 +18,7 @@ Usage::
 
 from __future__ import annotations
 
-from lightercore.exceptions import AmbiguousIDError, LighterError
+from lightercore.exceptions import LighterError
 
 
 class DOIError(LighterError):
@@ -93,9 +93,9 @@ class DOIAmbiguousError(DOIError):
 
 # Re-export from lightercore for convenience
 __all__ = [
+    "DOIAmbiguousError",
     "DOIError",
-    "DOINotFoundError",
     "DOIExistsError",
     "DOIInvalidError",
-    "DOIAmbiguousError",
+    "DOINotFoundError",
 ]

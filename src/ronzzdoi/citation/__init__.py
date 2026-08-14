@@ -20,8 +20,8 @@ from ronzzdoi.citation.formatter import CitationFormatter
 from ronzzdoi.citation.schemas import DOC_TYPE_SCHEMAS, DOC_TYPES, validate_metadata
 
 __all__ = [
-    "CitationFormatter",
-    "DOC_TYPE_SCHEMAS",
     "DOC_TYPES",
+    "DOC_TYPE_SCHEMAS",
+    "CitationFormatter",
     "validate_metadata",
 ]

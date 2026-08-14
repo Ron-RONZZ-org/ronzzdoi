@@ -10,11 +10,15 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ronzzdoi.doi.exceptions import DOIAmbiguousError, DOIExistsError, DOIInvalidError, DOINotFoundError
+from ronzzdoi.doi.exceptions import (
+    DOIAmbiguousError,
+    DOIExistsError,
+    DOIInvalidError,
+    DOINotFoundError,
+)
 from ronzzdoi.server.command.handlers import check_permission
 from ronzzdoi.server.command.registry import command
 from ronzzdoi.server.doi_routes import _get_doi_svc, _record_to_response, _search_svc
-
 
 # ── doi.assign ──────────────────────────────────────────────────────────
 
@@ -118,7 +122,11 @@ def doi_resolve(
         svc = _get_doi_svc()
         record = svc.resolve(doi, include_redirects=True)
     except DOIAmbiguousError as exc:
-        return {"type": "error", "title": "Ambiguous DOI", "data": {"message": str(exc)}}
+        return {
+            "type": "error",
+            "title": "Ambiguous DOI",
+            "data": {"message": str(exc)},
+        }
 
     if record is None:
         return {
@@ -190,7 +198,11 @@ def doi_modify(
     except DOINotFoundError as exc:
         return {"type": "error", "title": "Not Found", "data": {"message": str(exc)}}
     except DOIAmbiguousError as exc:
-        return {"type": "error", "title": "Ambiguous DOI", "data": {"message": str(exc)}}
+        return {
+            "type": "error",
+            "title": "Ambiguous DOI",
+            "data": {"message": str(exc)},
+        }
 
     return {
         "type": "detail",
@@ -234,7 +246,11 @@ def doi_merge(
     except DOINotFoundError as exc:
         return {"type": "error", "title": "Not Found", "data": {"message": str(exc)}}
     except DOIAmbiguousError as exc:
-        return {"type": "error", "title": "Ambiguous DOI", "data": {"message": str(exc)}}
+        return {
+            "type": "error",
+            "title": "Ambiguous DOI",
+            "data": {"message": str(exc)},
+        }
 
     return {
         "type": "detail",
@@ -274,7 +290,11 @@ def doi_delete(
         svc = _get_doi_svc()
         deleted = svc.delete_doi(doi)
     except DOIAmbiguousError as exc:
-        return {"type": "error", "title": "Ambiguous DOI", "data": {"message": str(exc)}}
+        return {
+            "type": "error",
+            "title": "Ambiguous DOI",
+            "data": {"message": str(exc)},
+        }
 
     if not deleted:
         return {
@@ -324,7 +344,8 @@ def doi_search(
             all_dois = svc.list_dois(limit=1000)
             q_lower = query.lower()
             results = [
-                r for r in all_dois
+                r
+                for r in all_dois
                 if q_lower in r.get("doi", "").lower()
                 or q_lower in r.get("title", "").lower()
             ][:limit]

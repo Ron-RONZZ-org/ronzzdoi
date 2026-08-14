@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from ronzzdoi.citation import CitationFormatter, DOC_TYPES, validate_metadata
+from ronzzdoi.citation import DOC_TYPES, CitationFormatter, validate_metadata
 from ronzzdoi.citation.schemas import ENTITY_TYPES
 from ronzzdoi.citation.styles import available_styles
 from ronzzdoi.doi.exceptions import DOINotFoundError
@@ -154,12 +154,15 @@ class TestDocTypes:
 
     def test_validate_metadata_passes_valid(self):
         """validate_metadata returns empty list for valid metadata."""
-        errors = validate_metadata("book", {
-            "authors": [{"person_doi": "10.ronzz/abc"}],
-            "title": "Test",
-            "publisher": "TestPub",
-            "year": 2024,
-        })
+        errors = validate_metadata(
+            "book",
+            {
+                "authors": [{"person_doi": "10.ronzz/abc"}],
+                "title": "Test",
+                "publisher": "TestPub",
+                "year": 2024,
+            },
+        )
         assert errors == []
 
     def test_validate_metadata_missing_required(self):
@@ -389,10 +392,16 @@ class TestAPA:
 
     def test_invalid_style(self, formatter, doi_svc):
         """Unknown style raises ValueError."""
-        doi = doi_svc.assign(doi_type="book", title="Test", metadata={
-            "authors": [{"person_doi": "10.ronzz/abc"}],
-            "title": "Test", "publisher": "TP", "year": 2024,
-        })["doi"]
+        doi = doi_svc.assign(
+            doi_type="book",
+            title="Test",
+            metadata={
+                "authors": [{"person_doi": "10.ronzz/abc"}],
+                "title": "Test",
+                "publisher": "TP",
+                "year": 2024,
+            },
+        )["doi"]
         with pytest.raises(ValueError, match="Unsupported citation style"):
             formatter.format(doi, style="mla")
 
@@ -568,7 +577,9 @@ class TestValidateDOIMetadata:
 
 
 class TestCrossRefResolution:
-    def test_book_section_with_book_doi(self, formatter, doi_svc, person_doi, author_doi):
+    def test_book_section_with_book_doi(
+        self, formatter, doi_svc, person_doi, author_doi
+    ):
         """bookSection resolves book_doi and includes parent book title."""
         # Create the parent book
         book_doi = doi_svc.assign(
@@ -644,7 +655,6 @@ class TestEdgeCases:
                 "year": 2020,
             },
         )["doi"]
-        from ronzzdoi.doi.service import DOIService as DS
         # Tombstone via the DOI service
         doi_svc.delete_doi(doi)
         # Should still format — the record is resolvable with deleted_at set
@@ -686,7 +696,9 @@ class TestEdgeCases:
         result = formatter.format(doi, style="apa")
         assert "Doe, J." in result
 
-    def test_inline_author_mixed_person_doi_and_inline(self, formatter, doi_svc, person_doi):
+    def test_inline_author_mixed_person_doi_and_inline(
+        self, formatter, doi_svc, person_doi
+    ):
         """Mixed author list: person_doi refs + inline authors."""
         doi = doi_svc.assign(
             doi_type="book",

@@ -6,7 +6,6 @@ connection management.
 
 from __future__ import annotations
 
-import sys
 from typing import Any
 
 import httpx
@@ -149,11 +148,11 @@ class RonzzdoiClient:
 
 
 __all__ = [
+    "AccessDeniedError",
+    "AuthenticationError",
+    "ClientError",
+    "ConnectionError_",
     "RonzzdoiClient",
     "RonzzdoiError",
-    "AuthenticationError",
-    "AccessDeniedError",
-    "ConnectionError_",
     "ServerError",
-    "ClientError",
 ]

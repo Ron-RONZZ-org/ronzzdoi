@@ -17,12 +17,12 @@ Usage::
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from fastapi import Header, HTTPException
-from starlette.status import HTTP_403_FORBIDDEN
-
 from lighterauth.middleware import Lighterauth
+from starlette.status import HTTP_403_FORBIDDEN
 
 from ronzzdoi.auth.config import PERMISSION_HIERARCHY
 

@@ -9,7 +9,8 @@ Person/entity lookup should be cached per format call by the caller.
 from __future__ import annotations
 
 import json
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 DOI_RESOLVER = Callable[[str], dict[str, Any] | None]
 """Signature for resolving a DOI to its record (with deserialized metadata)."""
@@ -110,9 +111,21 @@ def format_apa(record: dict[str, Any], *, resolve: DOI_RESOLVER) -> str:
         return _format_entity_citation(doi_type, meta, _resolve)
 
     # ── Common author/date prefix ───────────────────────────────────
-    authors_raw = meta.get("authors") or meta.get("presenters") or meta.get("creators") or meta.get("directors") or meta.get("hosts") or meta.get("artists") or []
+    authors_raw = (
+        meta.get("authors")
+        or meta.get("presenters")
+        or meta.get("creators")
+        or meta.get("directors")
+        or meta.get("hosts")
+        or meta.get("artists")
+        or []
+    )
     author_str = _format_author_list_apa(authors_raw, _resolve)
-    year = meta.get("year", meta.get("date", "n.d."))[:4] if isinstance(meta.get("date"), str) else str(meta.get("year", "n.d."))
+    year = (
+        meta.get("year", meta.get("date", "n.d."))[:4]
+        if isinstance(meta.get("date"), str)
+        else str(meta.get("year", "n.d."))
+    )
 
     # ── Dispatch by type ────────────────────────────────────────────
     if doi_type == "book":
@@ -142,7 +155,9 @@ def format_apa(record: dict[str, Any], *, resolve: DOI_RESOLVER) -> str:
             vol_iss = f"*, {vol}" if vol else ""
             iss_str = f"({iss})" if iss else ""
             pages_str = f", {pages}" if pages else ""
-            return f"{author_str} ({year}). {title}. *{pub}*{vol_iss}{iss_str}{pages_str}."
+            return (
+                f"{author_str} ({year}). {title}. *{pub}*{vol_iss}{iss_str}{pages_str}."
+            )
         elif subtype == "preprint":
             archive = meta.get("archive", "")
             arch_str = f" {archive}." if archive else "."
@@ -230,7 +245,11 @@ def format_apa(record: dict[str, Any], *, resolve: DOI_RESOLVER) -> str:
         title = meta.get("title", "Untitled")
         circ_num = meta.get("circulaire_number", "")
         issuer_doi = meta.get("issuing_authority_doi", "")
-        issuer = _resolve_issuing_authority(issuer_doi, _resolve) if issuer_doi else "Unknown Authority"
+        issuer = (
+            _resolve_issuing_authority(issuer_doi, _resolve)
+            if issuer_doi
+            else "Unknown Authority"
+        )
         date = meta.get("date", year) if year != "n.d." else "n.d."
         return f"{issuer} ({date}). *{title}* (Circulaire No. {circ_num})."
 
@@ -238,7 +257,11 @@ def format_apa(record: dict[str, Any], *, resolve: DOI_RESOLVER) -> str:
         title = meta.get("title", "Untitled")
         version = meta.get("version", "")
         issuer_doi = meta.get("issuing_authority_doi", "")
-        issuer = _resolve_issuing_authority(issuer_doi, _resolve) if issuer_doi else "Unknown Authority"
+        issuer = (
+            _resolve_issuing_authority(issuer_doi, _resolve)
+            if issuer_doi
+            else "Unknown Authority"
+        )
         date = meta.get("date", year) if year != "n.d." else "n.d."
         vers_str = f" (Version {version})" if version else ""
         return f"{issuer} ({date}). *{title}*{vers_str}."
@@ -271,15 +294,21 @@ def _format_author_list_apa(
     return ", ".join(names[:-1]) + f", & {names[-1]}"
 
 
-def _format_entity_citation(doi_type: str, meta: dict[str, Any], resolve: DOI_RESOLVER) -> str:
+def _format_entity_citation(
+    doi_type: str, meta: dict[str, Any], resolve: DOI_RESOLVER
+) -> str:
     """Format an entity DOI as a plain label (not a citation)."""
     if doi_type == "person":
-        name = f"{meta.get('first_name', '')} {meta.get('last_name', 'Unknown')}".strip()
+        name = (
+            f"{meta.get('first_name', '')} {meta.get('last_name', 'Unknown')}".strip()
+        )
         return f"{name} [Person DOI — not a citable resource]"
     if doi_type == "abstract_entity":
         return f"{meta.get('legal_name', 'Unknown Entity')} [Entity DOI — not a citable resource]"
     if doi_type == "country":
-        return f"{meta.get('iso_code', 'Unknown')} [Country DOI — not a citable resource]"
+        return (
+            f"{meta.get('iso_code', 'Unknown')} [Country DOI — not a citable resource]"
+        )
     return "[Entity DOI — not a citable resource]"
 
 
@@ -313,9 +342,21 @@ def format_vancouver(record: dict[str, Any], *, resolve: DOI_RESOLVER) -> str:
     if doi_type in ("person", "abstract_entity", "country"):
         return _format_entity_citation(doi_type, meta, _resolve)
 
-    authors_raw = meta.get("authors") or meta.get("presenters") or meta.get("creators") or meta.get("directors") or meta.get("hosts") or meta.get("artists") or []
+    authors_raw = (
+        meta.get("authors")
+        or meta.get("presenters")
+        or meta.get("creators")
+        or meta.get("directors")
+        or meta.get("hosts")
+        or meta.get("artists")
+        or []
+    )
     author_str = _format_author_list_vancouver(authors_raw, _resolve)
-    year = meta.get("year", meta.get("date", "n.d."))[:4] if isinstance(meta.get("date"), str) else str(meta.get("year", "n.d."))
+    year = (
+        meta.get("year", meta.get("date", "n.d."))[:4]
+        if isinstance(meta.get("date"), str)
+        else str(meta.get("year", "n.d."))
+    )
 
     if doi_type == "book":
         title = meta.get("title", "Untitled")
@@ -335,7 +376,9 @@ def format_vancouver(record: dict[str, Any], *, resolve: DOI_RESOLVER) -> str:
             vol_iss = f"{vol}" if vol else ""
             iss_str = f"({iss})" if iss else ""
             pages_str = f":{pages}" if pages else ""
-            return f"{author_str}. {title}. {pub}. {year};{vol_iss}{iss_str}{pages_str}."
+            return (
+                f"{author_str}. {title}. {pub}. {year};{vol_iss}{iss_str}{pages_str}."
+            )
         elif subtype == "preprint":
             archive = meta.get("archive", "")
             arch_str = f" {archive}." if archive else ""
@@ -385,7 +428,14 @@ def format_json(record: dict[str, Any], *, resolve: DOI_RESOLVER) -> str:
     }
 
     # Resolve author/creator names for convenience
-    for list_key in ("authors", "presenters", "creators", "directors", "hosts", "artists"):
+    for list_key in (
+        "authors",
+        "presenters",
+        "creators",
+        "directors",
+        "hosts",
+        "artists",
+    ):
         items = meta.get(list_key, [])
         if isinstance(items, list) and items:
             resolved_names: list[str] = []
@@ -395,7 +445,9 @@ def format_json(record: dict[str, Any], *, resolve: DOI_RESOLVER) -> str:
                     person = resolve(p_doi)
                     if person:
                         m = person.get("metadata", {})
-                        name = f"{m.get('last_name', '')}, {m.get('first_name', '')}".strip().strip(",")
+                        name = f"{m.get('last_name', '')}, {m.get('first_name', '')}".strip().strip(
+                            ","
+                        )
                         resolved_names.append(name or "[unknown]")
                     else:
                         resolved_names.append(p_doi)
@@ -411,12 +463,14 @@ def format_json(record: dict[str, Any], *, resolve: DOI_RESOLVER) -> str:
             if issuer.get("doi_type") == "person":
                 m = issuer.get("metadata", {})
                 citation_data["resolved_issuing_authority"] = (
-                    f"{m.get('last_name', '')}, {m.get('first_name', '')}"
-                ).strip().strip(",")
-            else:
-                citation_data["resolved_issuing_authority"] = (
-                    issuer.get("metadata", {}).get("legal_name", "")
+                    (f"{m.get('last_name', '')}, {m.get('first_name', '')}")
+                    .strip()
+                    .strip(",")
                 )
+            else:
+                citation_data["resolved_issuing_authority"] = issuer.get(
+                    "metadata", {}
+                ).get("legal_name", "")
 
     return json.dumps(citation_data, indent=2, ensure_ascii=False)
 

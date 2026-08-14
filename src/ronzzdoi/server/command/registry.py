@@ -14,7 +14,8 @@ Usage::
 from __future__ import annotations
 
 import functools
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 # ── In-memory registry ──────────────────────────────────────────────────
 
@@ -93,7 +94,9 @@ def register_module(
     prefer explicit registration.
     """
     for path, (func, desc) in module_handlers.items():
-        _handlers[path] = func  # register_module callers must provide wrapper-compatible funcs
+        _handlers[path] = (
+            func  # register_module callers must provide wrapper-compatible funcs
+        )
         if desc:
             _descriptions[path] = desc
     _invalidate_cache()
@@ -163,7 +166,7 @@ def dispatch(
     if not tokens:
         raise CommandNotFoundError("No command tokens provided")
 
-    cmd_path, cmd_len, handler = _find_handler(tokens)
+    _cmd_path, cmd_len, handler = _find_handler(tokens)
 
     if handler is not None:
         positionals = tokens[cmd_len:]
@@ -235,10 +238,7 @@ def _build_tree() -> list[dict[str, Any]]:
             ]
         return result
 
-    return [
-        _node_to_dict(n)
-        for n in sorted(root.values(), key=lambda x: x["name"])
-    ]
+    return [_node_to_dict(n) for n in sorted(root.values(), key=lambda x: x["name"])]
 
 
 # Cached tree — invalidate on new registration

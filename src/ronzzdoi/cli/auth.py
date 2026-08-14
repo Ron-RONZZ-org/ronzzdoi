@@ -36,7 +36,9 @@ def register_subparser(subparsers: argparse._SubParsersAction) -> None:
         help="Create a new API key",
         description="Generate a new API key. The raw key is shown **only once**.",
     )
-    create_parser.add_argument("--name", required=True, help="Human-readable name for the key")
+    create_parser.add_argument(
+        "--name", required=True, help="Human-readable name for the key"
+    )
     create_parser.add_argument(
         "--permission",
         choices=["read_only", "edit", "admin"],
@@ -145,7 +147,9 @@ def _cmd_list(args: argparse.Namespace, client: RonzzdoiClient) -> None:
         print("No API keys found.")
         return
 
-    print(f"{'ID':<30} {'Name':<18} {'Permission':<10} {'Owner':<18} {'Prefix':<10} {'Expires':<22} {'Created':<22}")
+    print(
+        f"{'ID':<30} {'Name':<18} {'Permission':<10} {'Owner':<18} {'Prefix':<10} {'Expires':<22} {'Created':<22}"
+    )
     print("-" * 130)
     for key in keys:
         print(
@@ -167,7 +171,9 @@ def _cmd_update(args: argparse.Namespace, client: RonzzdoiClient) -> None:
     if args.permission is not None:
         body["permission"] = args.permission
     if args.expires_at is not None:
-        body["expires_at"] = None if args.expires_at.lower() == "null" else args.expires_at
+        body["expires_at"] = (
+            None if args.expires_at.lower() == "null" else args.expires_at
+        )
 
     if not body:
         print("No changes specified. Use --name, --permission, or --expires-at.")

@@ -16,7 +16,9 @@ class TestCreateApiKey:
         )
         assert resp.status_code == 401, resp.text
 
-    def test_create_read_only(self, client: TestClient, admin_api_key_admin: str) -> None:
+    def test_create_read_only(
+        self, client: TestClient, admin_api_key_admin: str
+    ) -> None:
         """POST with valid admin auth creates a read-only key."""
         resp = client.post(
             "/api/v1/auth/keys",
@@ -44,7 +46,9 @@ class TestCreateApiKey:
         assert data["permission"] == "admin"
         assert data["key"].startswith("la_")
 
-    def test_create_with_expiry(self, client: TestClient, admin_api_key_admin: str) -> None:
+    def test_create_with_expiry(
+        self, client: TestClient, admin_api_key_admin: str
+    ) -> None:
         """POST with expires_at sets the expiration date."""
         resp = client.post(
             "/api/v1/auth/keys",
@@ -60,7 +64,9 @@ class TestCreateApiKey:
         assert data["expires_at"] is not None
         assert "2027" in data["expires_at"]
 
-    def test_invalid_permission(self, client: TestClient, admin_api_key_admin: str) -> None:
+    def test_invalid_permission(
+        self, client: TestClient, admin_api_key_admin: str
+    ) -> None:
         """POST with an invalid permission value → 422."""
         resp = client.post(
             "/api/v1/auth/keys",
@@ -78,7 +84,9 @@ class TestListApiKeys:
         resp = client.get("/api/v1/auth/keys")
         assert resp.status_code == 401, resp.text
 
-    def test_list_keys(self, client: TestClient, admin_api_key_admin: str, admin_api_key_readonly: str) -> None:
+    def test_list_keys(
+        self, client: TestClient, admin_api_key_admin: str, admin_api_key_readonly: str
+    ) -> None:
         """GET with valid admin auth returns the list of keys."""
         resp = client.get(
             "/api/v1/auth/keys",
@@ -92,13 +100,16 @@ class TestListApiKeys:
         for entry in data:
             assert "key" not in entry, f"Raw key leaked in list: {entry}"
 
-    def test_include_expired(self, client: TestClient, admin_api_key_admin: str, auth_db) -> None:
+    def test_include_expired(
+        self, client: TestClient, admin_api_key_admin: str, auth_db
+    ) -> None:
         """GET with include_expired=true includes expired keys."""
         # Insert an expired key directly
         import secrets
+
         from lighterauth.api_key import generate_api_key
 
-        raw, prefix, hashed = generate_api_key()
+        _raw, prefix, hashed = generate_api_key()
         auth_db.execute(
             "INSERT INTO api_keys (id, name, key, prefix, permission, "
             "owner, expires_at, created_at, updated_at) "
@@ -141,7 +152,9 @@ class TestRevokeApiKey:
         resp = client.delete("/api/v1/auth/keys/some-id")
         assert resp.status_code == 401, resp.text
 
-    def test_revoke_nonexistent(self, client: TestClient, admin_api_key_admin: str) -> None:
+    def test_revoke_nonexistent(
+        self, client: TestClient, admin_api_key_admin: str
+    ) -> None:
         """DELETE with a non-existent key ID → 404."""
         resp = client.delete(
             "/api/v1/auth/keys/nonexistent-id-12345",
@@ -189,9 +202,7 @@ class TestUpdateApiKey:
         )
         assert resp.status_code == 401, resp.text
 
-    def test_update_name(
-        self, client: TestClient, admin_api_key_admin: str
-    ) -> None:
+    def test_update_name(self, client: TestClient, admin_api_key_admin: str) -> None:
         """PATCH updates the key name."""
         # First create a key
         create_resp = client.post(
@@ -235,9 +246,7 @@ class TestUpdateApiKey:
         data = resp.json()
         assert data["permission"] == "admin"
 
-    def test_update_expiry(
-        self, client: TestClient, admin_api_key_admin: str
-    ) -> None:
+    def test_update_expiry(self, client: TestClient, admin_api_key_admin: str) -> None:
         """PATCH updates the expiration date."""
         create_resp = client.post(
             "/api/v1/auth/keys",
@@ -257,9 +266,7 @@ class TestUpdateApiKey:
         assert data["expires_at"] is not None
         assert "2028" in data["expires_at"]
 
-    def test_clear_expiry(
-        self, client: TestClient, admin_api_key_admin: str
-    ) -> None:
+    def test_clear_expiry(self, client: TestClient, admin_api_key_admin: str) -> None:
         """PATCH with expires_at=null clears the expiration."""
         create_resp = client.post(
             "/api/v1/auth/keys",
@@ -312,9 +319,7 @@ class TestUpdateApiKey:
         )
         assert resp.status_code == 404, resp.text
 
-    def test_no_changes(
-        self, client: TestClient, admin_api_key_admin: str
-    ) -> None:
+    def test_no_changes(self, client: TestClient, admin_api_key_admin: str) -> None:
         """PATCH with no fields → returns current key unchanged."""
         create_resp = client.post(
             "/api/v1/auth/keys",

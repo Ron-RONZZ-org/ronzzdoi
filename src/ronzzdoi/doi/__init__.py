@@ -35,25 +35,21 @@ from ronzzdoi.doi.schema import (
 from ronzzdoi.doi.service import DOIService
 
 __all__ = [
-    # Service
-    "DOIService",
-    # Exceptions
+    "DOI_PATTERN",
+    "DOI_PREFIX",
+    "DOI_PREFIX_PATTERN",
+    "UUID4_HEX_LENGTH",
+    "DOIAmbiguousError",
+    "DOIAssignRequest",
     "DOIError",
-    "DOINotFoundError",
     "DOIExistsError",
     "DOIInvalidError",
-    "DOIAmbiguousError",
-    # Schema
-    "DOIAssignRequest",
     "DOIModifyRequest",
-    "DOIResponse",
+    "DOINotFoundError",
     "DOIResolveResponse",
+    "DOIResponse",
+    "DOIService",
     "RedirectRecord",
-    # Constants & validators
-    "DOI_PREFIX",
-    "UUID4_HEX_LENGTH",
-    "DOI_PATTERN",
-    "DOI_PREFIX_PATTERN",
-    "is_valid_doi",
     "is_doi_prefix",
+    "is_valid_doi",
 ]
