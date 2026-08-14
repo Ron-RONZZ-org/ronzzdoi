@@ -256,8 +256,9 @@ cd web && npm run dev
 
 # Terminal 3: run smoke test
 export RONZZDOI_API_KEY="la_..."   # admin key from the ronzzdoi-dev --seed output
+cd web
 CHROME_PATH=$(npx playwright install --list 2>/dev/null | grep chromium | head -1 | awk '{print $2}') \
-  node tests/e2e_gui_smoke.mjs
+  npm run test:e2e
 ```
 
 The E2E test opens the GUI in headless Chromium, types `!help`, `!doi assign`, `!doi search`, `!citation show`, asserts tabs open with content, and fails on any JS console error. Command-based tests require an authenticated session, so the admin key from `ronzzdoi-dev --seed` must be passed via `RONZZDOI_API_KEY`; when set, the suite additionally verifies the assign-form type dropdown, the human-friendly metadata table, citation loading without auth errors, and resolvable DOI copy URLs.
