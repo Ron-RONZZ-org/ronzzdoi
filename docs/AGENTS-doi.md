@@ -72,7 +72,11 @@ service records:
   link result tabs to the public web).
 - **Multilingual titles** — a `title` stored as JSON text (`{"en": "…",
   "fr": "…"}`) is deserialized to a dict in API responses (idempotent for
-  plain strings).
+  plain strings).  The same language-map form applies to **any pure-text
+  metadata field** (e.g. a film's `title` or `studio`) — values inside
+  `metadata_json` may be language maps, and citation styles render the
+  **primary language** (the map's FIRST key; default `en`, settable per
+  field in the GUI — e.g. `fr` for a French-original song title).
 - **`content_kind`** — passed through on unified-search hits so the GUI can
   render snippet results distinctly.
 - `GET /api/v1/doi/schemas` — serves the citation doc-type field schemas
@@ -92,5 +96,14 @@ service records:
   redirects when typed in a browser.
 - **`GET /api/v1/doi/types`**: returns the supported `doi_type` values
   (citation `DOC_TYPES` + `ENTITY_TYPES` + `external`) and the per-type
-  metadata field schemas from `citation.schemas.DOC_TYPE_SCHEMAS`, used by
-  the GUI assign/modify form for its type dropdown and guided metadata input.
+  metadata field schemas from `citation.schemas.DOC_TYPE_SCHEMAS` **and
+  `ENTITY_SCHEMAS`**, used by the GUI assign/modify form for its type
+  dropdown and guided metadata input.  Entity types (person,
+  abstract_entity, country) have guided schemas so no raw-JSON entry is
+  needed.
+- **`!doi assign` without a URL**: the URL is optional — entity DOIs
+  (person, abstract_entity, country) are assigned with `target_url=NULL`.
+  A bare `!doi assign` (no args) still returns the interactive form.
+- **CLI `doi assign --metadata <json>`**: passes type-specific metadata as
+  JSON, including language maps for pure-text fields, e.g.
+  `--metadata '{"title": {"en": "...", "fr": "..."}}'`.

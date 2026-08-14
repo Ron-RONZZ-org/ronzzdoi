@@ -92,6 +92,18 @@ class TestAssign:
         result = svc.assign("math", r"\frac{a}{b}")
         assert result["content_kind"] == "math"
 
+    def test_assign_multilingual_title(self, svc):
+        """A language-map title round-trips as a dict (#47)."""
+        result = svc.assign(
+            "text",
+            "To be or not to be.",
+            title={"en": "Hamlet", "fr": "Hamlet (FR)"},
+        )
+        assert result["title"] == {"en": "Hamlet", "fr": "Hamlet (FR)"}
+        # Re-fetch to confirm the JSON-text storage round-trips.
+        resolved = svc.resolve(result["doi"])
+        assert resolved["title"] == {"en": "Hamlet", "fr": "Hamlet (FR)"}
+
     def test_assign_invalid_kind(self, svc):
         with pytest.raises(SnippetInvalidError, match="content kind"):
             svc.assign("image", "data")
@@ -195,6 +207,15 @@ class TestModify:
         result = svc.assign("text", "quote", title="Old")
         updated = svc.modify(result["doi"], title="New")
         assert updated["title"] == "New"
+
+    def test_modify_multilingual_title(self, svc):
+        """Modify accepts a language-map title (#47)."""
+        result = svc.assign("text", "quote")
+        updated = svc.modify(
+            result["doi"],
+            title={"en": "New", "de": "Neu"},
+        )
+        assert updated["title"] == {"en": "New", "de": "Neu"}
 
     def test_modify_source_and_pages(self, svc, doi_svc):
         source = doi_svc.assign("https://example.com/book", doi_type="book")

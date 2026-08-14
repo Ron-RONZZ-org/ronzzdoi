@@ -10,11 +10,13 @@
    */
 
   import { buildEmbedHtml, embedUrlFor } from "./embed.js";
+  import { titleToFormValue } from "./doiForm.js";
 
   let { data = {} } = $props();
 
   const doi = $derived(data.doi || "");
-  const title = $derived(data.title || "");
+  // Multilingual titles are language maps — display the primary language.
+  const title = $derived(titleToFormValue(data.title) || "");
   const contentKind = $derived(data.content_kind || "text");
   const content = $derived(data.content || "");
   const language = $derived(data.language || "");

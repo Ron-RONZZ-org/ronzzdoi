@@ -111,6 +111,13 @@ prints just the embed URL for JS-based embeds.
 - `code` → language field
 - `text` → source DOI + page start/end fields
 
+The **title** field supports multilingual titles like DOI titles: an
+"Add translations" button opens per-language rows, and the stored title
+is a language map (`{"en": "...", "fr": "..."}` — JSON text in the
+`dois.title` column, deserialized to a dict in API responses).  The
+primary language (map's first key) is user-settable and defaults to
+`en`.
+
 `!snippet assign` and `!snippet resolve` return the `snippet` tab type,
 rendered by `SnippetTab.svelte` with a **Copy Embed** button that copies
 the iframe tag to the clipboard.  The embed base URL can be overridden

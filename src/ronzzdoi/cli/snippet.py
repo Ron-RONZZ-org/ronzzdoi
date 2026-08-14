@@ -33,10 +33,17 @@ def _normalize_doi(doi: str) -> str:
     return doi
 
 
+def _display_title(title: Any) -> str:
+    """Render a title for the terminal (primary language of a map)."""
+    if isinstance(title, dict):
+        return str(next(iter(title.values()), ""))
+    return str(title) if title is not None else ""
+
+
 def _print_snippet(record: dict[str, Any]) -> None:
     """Print a snippet record in a human-readable format."""
     print(f"Snippet:  {record.get('doi', '?')}")
-    print(f"  Title:      {record.get('title', '')}")
+    print(f"  Title:      {_display_title(record.get('title'))}")
     print(f"  Kind:       {record.get('content_kind', '?')}")
     if record.get("language"):
         print(f"  Language:   {record.get('language')}")
@@ -187,7 +194,7 @@ def _cmd_assign(args: argparse.Namespace, client: RonzzdoiClient) -> None:
         return
 
     print(f"Snippet assigned: {result.get('doi', '?')}")
-    print(f"  Title:   {result.get('title', '')}")
+    print(f"  Title:   {_display_title(result.get('title'))}")
     print(f"  Kind:    {result.get('content_kind', '?')}")
     if result.get("language"):
         print(f"  Language: {result.get('language')}")

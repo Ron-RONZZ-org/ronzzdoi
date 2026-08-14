@@ -11,6 +11,7 @@ path-parameter routes so that FastAPI/Starlette matches them first.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -82,9 +83,19 @@ def _record_to_snippet_response(
     The record is the merged DOI + snippets row produced by
     :class:`SnippetService`.
     """
+    title = record.get("title", "")
+    # Multilingual titles are stored as JSON text — deserialize to a dict
+    # for API consumers (idempotent for plain strings and dicts).
+    if isinstance(title, str):
+        try:
+            parsed = json.loads(title)
+            if isinstance(parsed, dict):
+                title = parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
     result = {
         "doi": record["doi"],
-        "title": record.get("title", ""),
+        "title": title,
         "content_kind": record.get("content_kind", "text"),
         "content": record.get("content", ""),
         "language": record.get("language", ""),

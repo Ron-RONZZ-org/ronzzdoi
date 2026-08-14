@@ -24,7 +24,7 @@ from lightercore.crud import now
 from lightercore.db import LighterDB
 
 from ronzzdoi.doi.exceptions import DOINotFoundError
-from ronzzdoi.doi.service import DOIService
+from ronzzdoi.doi.service import DOIService, serialize_title
 from ronzzdoi.snippet.constants import normalize_content_kind
 from ronzzdoi.snippet.exceptions import (
     SnippetInvalidError,
@@ -58,7 +58,7 @@ class SnippetService:
         content_kind: str,
         content: str,
         *,
-        title: str = "",
+        title: str | dict[str, str] = "",
         language: str = "",
         source_doi: str | None = None,
         page_start: str = "",
@@ -99,6 +99,9 @@ class SnippetService:
 
         ts = now()
         doi = DOIService.generate_doi()
+
+        # Multilingual titles are language maps — store as JSON text.
+        title = serialize_title(title)
 
         with self._db.transaction() as conn:
             conn.execute(
@@ -150,7 +153,7 @@ class SnippetService:
         *,
         content: str | None = None,
         content_kind: str | None = None,
-        title: str | None = None,
+        title: str | dict[str, str] | None = None,
         language: str | None = None,
         source_doi: str | None = None,
         page_start: str | None = None,
@@ -228,7 +231,7 @@ class SnippetService:
             if title is not None:
                 conn.execute(
                     "UPDATE dois SET title = ?, updated_at = ? WHERE doi = ?",
-                    (title, ts, record["doi"]),
+                    (serialize_title(title), ts, record["doi"]),
                 )
 
         return self._fetch_record(record["doi"])

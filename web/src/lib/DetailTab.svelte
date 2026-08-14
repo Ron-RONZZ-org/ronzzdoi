@@ -56,7 +56,8 @@
       ? Object.keys(titleData)
       : [],
   );
-  let selectedLanguage = $state("en");
+  // Default to the primary language (first key); fall back to "en".
+  let selectedLanguage = $state("");
 
   let displayTitle = $derived(
     titleLanguages.includes(selectedLanguage)
