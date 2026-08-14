@@ -511,7 +511,7 @@
     message={deleteTarget
       ? `Tombstone DOI "${deleteTarget}"? This action cannot be undone.`
       : `Delete ${sel.numSelected} DOI${sel.numSelected !== 1 ? "s" : ""}?`}
-    onConfirm={handleConfirmDelete}
+    onSubmit={handleConfirmDelete}
     onDismiss={handleCancelDelete}
   />
 {/if}
