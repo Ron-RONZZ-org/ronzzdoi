@@ -11,7 +11,9 @@ from ronzzdoi.server.command.registry import command, get_descriptions
 
 
 @command("help", description="Show available commands")
-def show_help(flags: dict[str, str], positionals: list[str], user: dict[str, Any] | None = None) -> dict[str, Any]:
+def show_help(
+    flags: dict[str, str], positionals: list[str], user: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """!help [command]
 
     Returns the list of registered command definitions.

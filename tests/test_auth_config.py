@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from ronzzdoi.auth.config import (
@@ -54,8 +53,14 @@ class TestPermissionConstants:
 
     def test_permission_hierarchy_ordering(self) -> None:
         """Hierarchy levels increase with access rights."""
-        assert PERMISSION_HIERARCHY[PERMISSION_READ_ONLY] < PERMISSION_HIERARCHY[PERMISSION_EDIT]
-        assert PERMISSION_HIERARCHY[PERMISSION_EDIT] < PERMISSION_HIERARCHY[PERMISSION_ADMIN]
+        assert (
+            PERMISSION_HIERARCHY[PERMISSION_READ_ONLY]
+            < PERMISSION_HIERARCHY[PERMISSION_EDIT]
+        )
+        assert (
+            PERMISSION_HIERARCHY[PERMISSION_EDIT]
+            < PERMISSION_HIERARCHY[PERMISSION_ADMIN]
+        )
 
 
 class TestHeaderConstants:

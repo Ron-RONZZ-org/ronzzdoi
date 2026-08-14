@@ -35,14 +35,27 @@ def test_search_fts(capsys: pytest.CaptureFixture) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert "q=quantum" in str(request.url)
         assert "mode=fts" in str(request.url)
-        return httpx.Response(200, json={
-            "items": [
-                {"doi": "10.ronzz/abc", "title": "Quantum Computing", "target_url": "https://ex.com", "doi_type": "webpage"},
-                {"doi": "10.ronzz/def", "title": "Quantum Physics", "target_url": "https://ex2.com", "doi_type": "book"},
-            ],
-            "total": 2,
-            "mode": "fts",
-        })
+        return httpx.Response(
+            200,
+            json={
+                "items": [
+                    {
+                        "doi": "10.ronzz/abc",
+                        "title": "Quantum Computing",
+                        "target_url": "https://ex.com",
+                        "doi_type": "webpage",
+                    },
+                    {
+                        "doi": "10.ronzz/def",
+                        "title": "Quantum Physics",
+                        "target_url": "https://ex2.com",
+                        "doi_type": "book",
+                    },
+                ],
+                "total": 2,
+                "mode": "fts",
+            },
+        )
 
     client = _mock_client(handler)
     args = _make_args(query="quantum", mode="fts")
@@ -59,21 +72,45 @@ def test_search_semantic(capsys: pytest.CaptureFixture) -> None:
 
     def handler(request: httpx.Request) -> httpx.Request:
         assert "mode=semantic" in str(request.url)
-        return httpx.Response(200, json={
-            "items": [{"doi": "10.ronzz/abc", "title": "Result", "target_url": "https://ex.com", "doi_type": "webpage"}],
-            "total": 1,
-            "mode": "semantic",
-        })
+        return httpx.Response(
+            200,
+            json={
+                "items": [
+                    {
+                        "doi": "10.ronzz/abc",
+                        "title": "Result",
+                        "target_url": "https://ex.com",
+                        "doi_type": "webpage",
+                    }
+                ],
+                "total": 1,
+                "mode": "semantic",
+            },
+        )
 
     client = _mock_client(handler)
     # Note: handler is actually a function, but we need to return Response
     # Let's rewrite properly
-    transport = httpx.MockTransport(lambda req: httpx.Response(200, json={
-        "items": [{"doi": "10.ronzz/abc", "title": "Semantic Result", "target_url": "https://ex.com", "doi_type": "webpage"}],
-        "total": 1,
-        "mode": "semantic",
-    }))
-    client = RonzzdoiClient(api_key="test-key", client=httpx.Client(transport=transport))
+    transport = httpx.MockTransport(
+        lambda req: httpx.Response(
+            200,
+            json={
+                "items": [
+                    {
+                        "doi": "10.ronzz/abc",
+                        "title": "Semantic Result",
+                        "target_url": "https://ex.com",
+                        "doi_type": "webpage",
+                    }
+                ],
+                "total": 1,
+                "mode": "semantic",
+            },
+        )
+    )
+    client = RonzzdoiClient(
+        api_key="test-key", client=httpx.Client(transport=transport)
+    )
     args = _make_args(query="quantum", mode="semantic")
     _cmd_search(args, client)
     captured = capsys.readouterr()
@@ -83,10 +120,19 @@ def test_search_semantic(capsys: pytest.CaptureFixture) -> None:
 def test_search_empty(capsys: pytest.CaptureFixture) -> None:
     """search with no results shows message."""
 
-    transport = httpx.MockTransport(lambda req: httpx.Response(200, json={
-        "items": [], "total": 0, "mode": "fts",
-    }))
-    client = RonzzdoiClient(api_key="test-key", client=httpx.Client(transport=transport))
+    transport = httpx.MockTransport(
+        lambda req: httpx.Response(
+            200,
+            json={
+                "items": [],
+                "total": 0,
+                "mode": "fts",
+            },
+        )
+    )
+    client = RonzzdoiClient(
+        api_key="test-key", client=httpx.Client(transport=transport)
+    )
     args = _make_args(query="nonexistent", mode="fts")
     _cmd_search(args, client)
     captured = capsys.readouterr()
@@ -96,10 +142,19 @@ def test_search_empty(capsys: pytest.CaptureFixture) -> None:
 def test_search_json(capsys: pytest.CaptureFixture) -> None:
     """search --json outputs raw JSON."""
 
-    transport = httpx.MockTransport(lambda req: httpx.Response(200, json={
-        "items": [{"doi": "10.ronzz/x"}], "total": 1, "mode": "fts",
-    }))
-    client = RonzzdoiClient(api_key="test-key", client=httpx.Client(transport=transport))
+    transport = httpx.MockTransport(
+        lambda req: httpx.Response(
+            200,
+            json={
+                "items": [{"doi": "10.ronzz/x"}],
+                "total": 1,
+                "mode": "fts",
+            },
+        )
+    )
+    client = RonzzdoiClient(
+        api_key="test-key", client=httpx.Client(transport=transport)
+    )
     args = _make_args(query="x", mode="fts", json_output=True)
     _cmd_search(args, client)
     captured = capsys.readouterr()

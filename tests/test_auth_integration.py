@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-
 from lightercore.db import LighterDB
 
 
@@ -225,8 +224,6 @@ class TestCreateApp:
     def test_invalid_mode(self) -> None:
         """Invalid mode string raises ``ValueError``."""
         from ronzzdoi.server.app import create_app
-
-        import pytest
 
         with pytest.raises(ValueError, match="Unknown mode"):
             create_app(mode="invalid_mode")

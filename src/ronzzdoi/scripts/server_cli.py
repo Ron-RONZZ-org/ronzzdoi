@@ -71,7 +71,9 @@ def server_main() -> None:
         print(f"Starting ronzzdoi server (mode={mode}) on {host}:{port}")
         uvicorn.run(app, host=host, port=port)
     except ImportError:
-        print("uvicorn is required. Install with: uv pip install uvicorn", file=sys.stderr)
+        print(
+            "uvicorn is required. Install with: uv pip install uvicorn", file=sys.stderr
+        )
         sys.exit(1)
     except KeyboardInterrupt:
         print("\nServer stopped.")

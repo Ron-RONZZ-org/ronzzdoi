@@ -20,7 +20,9 @@ from ronzzdoi.cli.client import (
 )
 
 
-def _mock_transport(response_body: dict[str, Any] | None = None, status_code: int = 200) -> httpx.MockTransport:
+def _mock_transport(
+    response_body: dict[str, Any] | None = None, status_code: int = 200
+) -> httpx.MockTransport:
     """Create a MockTransport that returns a fixed JSON response."""
     response_data = httpx.Response(status_code, json=response_body or {})
 
@@ -49,7 +51,9 @@ def test_auth_header_sent() -> None:
         return httpx.Response(200, json={"ok": True})
 
     transport = httpx.MockTransport(handler)
-    client = RonzzdoiClient(api_key="test-key-123", client=httpx.Client(transport=transport))
+    client = RonzzdoiClient(
+        api_key="test-key-123", client=httpx.Client(transport=transport)
+    )
     client.get("/api/v1/doi")
     assert captured["auth"] == "Bearer test-key-123"
 
@@ -73,42 +77,59 @@ def test_auth_header_empty_key() -> None:
 
 def test_401_authentication_error() -> None:
     """401 raises AuthenticationError."""
-    client = RonzzdoiClient(api_key="bad", client=httpx.Client(transport=_error_transport(401, "Invalid API key")))
+    client = RonzzdoiClient(
+        api_key="bad",
+        client=httpx.Client(transport=_error_transport(401, "Invalid API key")),
+    )
     with pytest.raises(AuthenticationError, match="Invalid API key"):
         client.get("/api/v1/doi")
 
 
 def test_403_permission_error() -> None:
     """403 raises AccessDeniedError."""
-    client = RonzzdoiClient(api_key="ro-key", client=httpx.Client(transport=_error_transport(403, "Insufficient permission")))
+    client = RonzzdoiClient(
+        api_key="ro-key",
+        client=httpx.Client(transport=_error_transport(403, "Insufficient permission")),
+    )
     with pytest.raises(AccessDeniedError, match="Insufficient permission"):
         client.get("/api/v1/doi")
 
 
 def test_404_client_error() -> None:
     """404 raises ClientError."""
-    client = RonzzdoiClient(api_key="test", client=httpx.Client(transport=_error_transport(404, "Not found")))
+    client = RonzzdoiClient(
+        api_key="test",
+        client=httpx.Client(transport=_error_transport(404, "Not found")),
+    )
     with pytest.raises(ClientError, match="Not found"):
         client.get("/api/v1/doi/nonexistent")
 
 
 def test_409_client_error() -> None:
     """409 raises ClientError."""
-    client = RonzzdoiClient(api_key="test", client=httpx.Client(transport=_error_transport(409, "Conflict")))
+    client = RonzzdoiClient(
+        api_key="test", client=httpx.Client(transport=_error_transport(409, "Conflict"))
+    )
     with pytest.raises(ClientError, match="Conflict"):
         client.post("/api/v1/doi", json={})
 
 
 def test_422_client_error() -> None:
     """422 raises ClientError."""
-    client = RonzzdoiClient(api_key="test", client=httpx.Client(transport=_error_transport(422, "Invalid input")))
+    client = RonzzdoiClient(
+        api_key="test",
+        client=httpx.Client(transport=_error_transport(422, "Invalid input")),
+    )
     with pytest.raises(ClientError, match="Invalid input"):
         client.post("/api/v1/doi", json={})
 
 
 def test_500_server_error() -> None:
     """500 raises ServerError."""
-    client = RonzzdoiClient(api_key="test", client=httpx.Client(transport=_error_transport(500, "Internal error")))
+    client = RonzzdoiClient(
+        api_key="test",
+        client=httpx.Client(transport=_error_transport(500, "Internal error")),
+    )
     with pytest.raises(ServerError, match="Internal error"):
         client.get("/api/v1/doi")
 
@@ -139,7 +160,9 @@ def test_204_returns_none() -> None:
 
 def test_get_returns_json() -> None:
     """GET returns parsed JSON."""
-    transport = httpx.MockTransport(lambda req: httpx.Response(200, json={"doi": "10.ronzz/abc", "title": "Test"}))
+    transport = httpx.MockTransport(
+        lambda req: httpx.Response(200, json={"doi": "10.ronzz/abc", "title": "Test"})
+    )
     client = RonzzdoiClient(api_key="test", client=httpx.Client(transport=transport))
     result = client.get("/api/v1/doi/10.ronzz/abc")
     assert result == {"doi": "10.ronzz/abc", "title": "Test"}
@@ -150,6 +173,7 @@ def test_post_returns_json() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         import json
+
         data = json.loads(request.content)
         return httpx.Response(201, json={"doi": "10.ronzz/new", **data})
 
@@ -165,7 +189,11 @@ def test_post_returns_json() -> None:
 
 def test_put_request() -> None:
     """PUT sends data and returns result."""
-    transport = httpx.MockTransport(lambda req: httpx.Response(200, json={"doi": "10.ronzz/abc", "title": "Updated"}))
+    transport = httpx.MockTransport(
+        lambda req: httpx.Response(
+            200, json={"doi": "10.ronzz/abc", "title": "Updated"}
+        )
+    )
     client = RonzzdoiClient(api_key="test", client=httpx.Client(transport=transport))
     result = client.put("/api/v1/doi/10.ronzz/abc", json={"title": "Updated"})
     assert result["title"] == "Updated"

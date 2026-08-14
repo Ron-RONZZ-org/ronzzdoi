@@ -18,7 +18,9 @@ def register_subparser(subparsers: argparse._SubParsersAction) -> None:
         help="Manage citations",
         description="Show citations and list available styles. Requires permission: read_only.",
     )
-    citation_sub = citation_parser.add_subparsers(dest="citation_command", required=True)
+    citation_sub = citation_parser.add_subparsers(
+        dest="citation_command", required=True
+    )
 
     # ── citation show ──────────────────────────────────────────────────────
     show_parser = citation_sub.add_parser(
@@ -50,7 +52,9 @@ def register_subparser(subparsers: argparse._SubParsersAction) -> None:
 
 def _cmd_show(args: argparse.Namespace, client: RonzzdoiClient) -> None:
     """Handle ``citation show``."""
-    result = client.get("/api/v1/citation", params={"doi": args.doi, "style": args.style})
+    result = client.get(
+        "/api/v1/citation", params={"doi": args.doi, "style": args.style}
+    )
 
     if getattr(args, "json_output", False):
         print(json.dumps(result, indent=2))

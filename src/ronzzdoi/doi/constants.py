@@ -57,10 +57,10 @@ def is_doi_prefix(s: str) -> bool:
 
 
 __all__ = [
-    "DOI_PREFIX",
-    "UUID4_HEX_LENGTH",
     "DOI_PATTERN",
+    "DOI_PREFIX",
     "DOI_PREFIX_PATTERN",
-    "is_valid_doi",
+    "UUID4_HEX_LENGTH",
     "is_doi_prefix",
+    "is_valid_doi",
 ]

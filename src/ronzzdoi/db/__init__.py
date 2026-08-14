@@ -22,11 +22,11 @@ from ronzzdoi.db.schema import MIGRATIONS
 from ronzzdoi.db.service import DOIService, RedirectService
 
 __all__ = [
-    "LighterDB",
     "DOIService",
+    "LighterDB",
     "RedirectService",
-    "init_db",
     "get_db",
+    "init_db",
 ]
 
 
@@ -43,7 +43,9 @@ def _after_connect(conn: sqlite3.Connection) -> None:
         pass
 
 
-def init_db(app_name: str = "ronzzdoi") -> tuple[LighterDB, DOIService, RedirectService]:
+def init_db(
+    app_name: str = "ronzzdoi",
+) -> tuple[LighterDB, DOIService, RedirectService]:
     """Initialize the database, apply migrations, and return service instances.
 
     Call this once at application startup.  Idempotent — subsequent calls
