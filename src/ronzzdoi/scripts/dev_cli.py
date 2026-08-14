@@ -329,6 +329,21 @@ def _seed_dois() -> None:
         except Exception as exc:
             print(f"  Warning: failed to seed DOI '{entry['title']}': {exc}")
 
+    # Seed a sample snippet so `!snippet search` has data in dev/CI.
+    try:
+        from ronzzdoi.snippet.service import SnippetService
+
+        snippet_svc = SnippetService(init_db()[0], doi_service)
+        snippet_svc.assign(
+            "text",
+            "To be or not to be, that is the question.",
+            title="Hamlet soliloquy",
+        )
+        count += 1
+    except Exception as exc:
+        print(f"  Warning: failed to seed snippet: {exc}")
+
     print(f"Seeded {count} sample DOIs of various types.")
     print("  Try: ronzzdoi doi search")
     print("  Try: ronzzdoi doi resolve <doi>")
+    print("  Try: ronzzdoi snippet search")
