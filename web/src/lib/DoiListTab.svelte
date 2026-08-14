@@ -21,6 +21,7 @@
   import ConfirmDialog from "@lightercore/ui/ConfirmDialog.svelte";
   import { deriveIdKey } from "./commandExecutor.js";
   import { resolveUrl } from "./api.js";
+  import { titleToFormValue } from "./doiForm.js";
 
   let { data: _data = {}, tabId, mode = "doi" } = $props();
   let isSnippet = $derived(mode === "snippet");
@@ -67,7 +68,7 @@
     !searchQuery
       ? items
       : items.filter((item) => {
-          const title = (item.title || "").toLowerCase();
+          const title = String(titleToFormValue(item.title) || "").toLowerCase();
           const doi = (item.doi || "").toLowerCase();
           const q = searchQuery.toLowerCase();
           return title.includes(q) || doi.includes(q);
@@ -522,7 +523,7 @@
           </span>
         {/if}
         <span class="title-col"
-          >{item.title || "(untitled)"}</span
+          >{titleToFormValue(item.title) || "(untitled)"}</span
         >
         <span class="badge-col">
           {#if isSnippet}

@@ -736,16 +736,29 @@ class TestDoiTypesEndpoint:
         assert "list" in fields["authors"]["types"]
         assert fields["year"]["types"] in (["int", "str"], ["str", "int"])
 
-    def test_entity_types_have_no_schema(
+    def test_entity_types_have_guided_schemas(
         self, doi_client: TestClient, admin_api_key_admin: str
     ) -> None:
-        """Entity types (person, country) have no metadata schema."""
+        """Entity types (person, country) have guided metadata schemas (#48)."""
         resp = doi_client.get(
             "/api/v1/doi/types", headers=_auth_header(admin_api_key_admin)
         )
         data = resp.json()
-        assert "person" not in data["schemas"]
-        assert "country" not in data["schemas"]
+
+        person = data["schemas"].get("person")
+        assert person is not None, "person schema missing"
+        fields = {f["name"]: f for f in person}
+        for name in ("first_name", "last_name", "orcid"):
+            assert name in fields, f"person schema missing field: {name}"
+
+        country = data["schemas"].get("country")
+        assert country is not None, "country schema missing"
+        iso = {f["name"]: f for f in country}
+        assert "iso_code" in iso, "country schema missing iso_code"
+
+        # Entity schemas never carry citation-required fields.
+        for field_def in person:
+            assert field_def["required"] is False
 
 
 # ── Test: resolve_url injection via command endpoint ──────────────────────
@@ -803,3 +816,87 @@ class TestCommandResolveUrl:
             },
         )
         assert resp.status_code == 401, resp.text
+
+
+# ── Test: !doi assign without a URL (entity DOIs) ─────────────────────────
+
+
+class TestCommandAssignNoUrl:
+    """``!doi assign`` without a target URL — entity DOIs (#48)."""
+
+    def test_assign_entity_without_url(
+        self, doi_client: TestClient, admin_api_key_admin: str
+    ) -> None:
+        """!doi assign --title X --type person creates a DOI with no URL."""
+        resp = doi_client.post(
+            "/api/v1/command",
+            headers=_auth_header(admin_api_key_admin),
+            json={
+                "tokens": ["doi", "assign"],
+                "flags": {"title": "Ada Lovelace", "type": "person"},
+                "raw_input": '!doi assign --title "Ada Lovelace" --type person',
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["type"] == "detail", body
+        data = body["data"]
+        assert data["doi_type"] == "person"
+        assert data["target_url"] is None
+        assert data["title"] == "Ada Lovelace"
+
+    def test_assign_with_flags_but_no_url(
+        self, doi_client: TestClient, admin_api_key_admin: str
+    ) -> None:
+        """!doi assign with a film type and no URL still assigns."""
+        resp = doi_client.post(
+            "/api/v1/command",
+            headers=_auth_header(admin_api_key_admin),
+            json={
+                "tokens": ["doi", "assign"],
+                "flags": {"title": "Inception", "type": "film"},
+                "raw_input": '!doi assign --title "Inception" --type film',
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()["data"]
+        assert data["doi_type"] == "film"
+        assert data["target_url"] is None
+
+    def test_bare_assign_returns_form(
+        self, doi_client: TestClient, admin_api_key_admin: str
+    ) -> None:
+        """A bare !doi assign (no args at all) still opens the form."""
+        resp = doi_client.post(
+            "/api/v1/command",
+            headers=_auth_header(admin_api_key_admin),
+            json={
+                "tokens": ["doi", "assign"],
+                "flags": {},
+                "raw_input": "!doi assign",
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["type"] == "form"
+
+    def test_assign_multilingual_metadata(
+        self, doi_client: TestClient, admin_api_key_admin: str
+    ) -> None:
+        """Language maps in --metadata round-trip for text fields (#47)."""
+        resp = doi_client.post(
+            "/api/v1/command",
+            headers=_auth_header(admin_api_key_admin),
+            json={
+                "tokens": ["doi", "assign"],
+                "flags": {
+                    "title": "Inception",
+                    "type": "film",
+                    "metadata": '{"title": {"en": "Inception", "fr": "Inception FR"}, "studio": {"en": "WB", "fr": "WB FR"}}',
+                },
+                "raw_input": '!doi assign --title Inception --type film --metadata \'{"title": {"en": "Inception", "fr": "Inception FR"}}\'',
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()["data"]
+        assert data["metadata"]["title"] == {"en": "Inception", "fr": "Inception FR"}
+        assert data["metadata"]["studio"] == {"en": "WB", "fr": "WB FR"}

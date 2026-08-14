@@ -35,8 +35,11 @@ def doi_assign(
     Usage::
 
         !doi assign <url> [--title '{"en":"..."}' --type external --metadata '{}']
+        !doi assign --title '{"en":"..."}' --type person   (no URL — entity DOIs)
 
-    Missing required params → returns ``form`` response.
+    The URL is optional — entity DOIs (person, abstract_entity, country)
+    are assigned without one.  A bare ``!doi assign`` (no args at all)
+    returns the interactive ``form`` response.
     """
     perm = check_permission(user, "edit")
     if perm:
@@ -44,7 +47,7 @@ def doi_assign(
 
     # URL from positional arg or --url flag
     url = positionals[0] if positionals else flags.get("url", "")
-    if not url:
+    if not url and not flags:
         return {
             "type": "form",
             "title": "Assign DOI",
@@ -75,7 +78,7 @@ def doi_assign(
     try:
         svc = _doi_routes._get_doi_svc()
         result = svc.assign(
-            target_url=url,
+            target_url=url or None,
             doi_type=doi_type,
             title=title,
             metadata=metadata,

@@ -24,6 +24,19 @@ export function isIntField(fieldDef) {
 }
 
 /**
+ * True when a schema field is a pure text field — one that accepts a
+ * plain string and nothing else (no list, no int).  These fields are
+ * eligible for multilingual translation maps.
+ *
+ * @param {object} fieldDef — schema field def from `/api/v1/doi/types`.
+ * @returns {boolean}
+ */
+export function isTranslateableField(fieldDef) {
+  const types = fieldDef?.types || [];
+  return types.includes("str") && !types.includes("list") && !types.includes("int");
+}
+
+/**
  * Convert a single person-list entry to its textarea line form.
  *
  * @param {*} entry — `{person_doi}` reference, `{given, family}` inline
@@ -97,13 +110,18 @@ export function entriesToLines(value) {
  *
  * List fields are parsed from textarea lines; integer-typed fields are
  * coerced to numbers when the input is numeric (plain strings are kept);
- * empty values are omitted.
+ * empty values are omitted.  Pure-text fields with translations become
+ * language maps with the configured primary language first.
  *
  * @param {object[]} schema — field defs from `/api/v1/doi/types`.
  * @param {Record<string, string>} values — form values keyed by field name.
+ * @param {Record<string, {lang: string, title: string}[]>} [translations]
+ *   per-field translation rows (language maps for pure-text fields).
+ * @param {Record<string, string>} [primaryLangs] — per-field primary
+ *   language code (default "en").
  * @returns {Record<string, *>}
  */
-export function fieldsToMetadata(schema, values) {
+export function fieldsToMetadata(schema, values, translations = {}, primaryLangs = {}) {
   const metadata = {};
   for (const fieldDef of schema || []) {
     const raw = values[fieldDef.name];
@@ -113,6 +131,15 @@ export function fieldsToMetadata(schema, values) {
       if (entries.length > 0) metadata[fieldDef.name] = entries;
     } else if (isIntField(fieldDef) && String(raw).trim() !== "" && Number.isFinite(Number(raw))) {
       metadata[fieldDef.name] = Number(raw);
+    } else if (isTranslateableField(fieldDef) && (translations[fieldDef.name] || []).length > 0) {
+      // Multilingual pure-text field → language map (or plain string when
+      // only the primary is filled).  Primary language is the first key.
+      const primaryLang = primaryLangs?.[fieldDef.name] || "en";
+      metadata[fieldDef.name] = buildTitle(
+        String(raw),
+        translations[fieldDef.name],
+        primaryLang,
+      );
     } else {
       metadata[fieldDef.name] = raw;
     }
@@ -134,6 +161,9 @@ export function metadataToFormValues(schema, metadata) {
     if (val === undefined || val === null) continue;
     if (isListField(fieldDef)) {
       values[fieldDef.name] = entriesToLines(val);
+    } else if (isTranslateableField(fieldDef) && isLanguageMap(val)) {
+      // Multilingual field → primary language into the input.
+      values[fieldDef.name] = languageMapPrimary(val);
     } else if (typeof val === "object") {
       values[fieldDef.name] = JSON.stringify(val);
     } else {
@@ -144,74 +174,158 @@ export function metadataToFormValues(schema, metadata) {
 }
 
 /**
- * Parse the stored title into a plain-string prefill value.
+ * Extract per-field translation rows from an existing metadata dict.
  *
- * Titles are plain strings, but multilingual titles are language maps
- * (`{"en": "...", "fr": "..."}` — stored as JSON text).  Returns the
- * primary language (`en`, falling back to the first entry) as the plain
- * input value.
+ * @param {object[]} schema — field defs from `/api/v1/doi/types`.
+ * @param {Record<string, *>} [metadata] — stored metadata dict.
+ * @returns {Record<string, {lang: string, title: string}[]>}
+ *   translation rows keyed by field name (empty arrays for plain values).
+ */
+export function metadataToTranslations(schema, metadata) {
+  const translations = {};
+  for (const fieldDef of schema || []) {
+    const val = metadata?.[fieldDef.name];
+    if (isTranslateableField(fieldDef) && isLanguageMap(val)) {
+      translations[fieldDef.name] = valueToTranslations(val);
+    }
+  }
+  return translations;
+}
+
+/**
+ * Extract per-field primary language codes from an existing metadata dict.
  *
- * @param {*} title — stored title (string or language map).
+ * @param {object[]} schema — field defs from `/api/v1/doi/types`.
+ * @param {Record<string, *>} [metadata] — stored metadata dict.
+ * @returns {Record<string, string>} primary language keyed by field name
+ *   (only fields whose stored value is a language map).
+ */
+export function metadataToPrimaryLangs(schema, metadata) {
+  const langs = {};
+  for (const fieldDef of schema || []) {
+    const val = metadata?.[fieldDef.name];
+    if (isTranslateableField(fieldDef) && isLanguageMap(val)) {
+      langs[fieldDef.name] = languageMapPrimaryLang(val);
+    }
+  }
+  return langs;
+}
+
+/**
+ * Parse a stored value into a plain-string prefill value.
+ *
+ * Multilingual values are language maps (stored as JSON text in the DB);
+ * returns the primary language (first key) as the plain input value.
+ *
+ * @param {*} value — stored value (string or language map).
  * @returns {string}
  */
-export function titleToFormValue(title) {
-  if (title === undefined || title === null) return "";
-  if (typeof title === "string") {
+export function titleToFormValue(value) {
+  if (value === undefined || value === null) return "";
+  if (typeof value === "string") {
     try {
-      const parsed = JSON.parse(title);
+      const parsed = JSON.parse(value);
       if (isLanguageMap(parsed)) {
-        return parsed.en || Object.values(parsed)[0] || "";
+        return languageMapPrimary(parsed);
       }
     } catch {
-      // Not JSON — plain title.
+      // Not JSON — plain string.
     }
-    return title;
+    return value;
   }
-  if (isLanguageMap(title)) {
-    return title.en || Object.values(title)[0] || "";
+  if (isLanguageMap(value)) {
+    return languageMapPrimary(value);
   }
-  return String(title);
+  return String(value);
 }
 
 /** True when *value* is a non-null, non-array object (a language map). */
-function isLanguageMap(value) {
+export function isLanguageMap(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/**
- * Extract the non-primary translations from a multilingual title.
- *
- * @param {*} title — stored title (string, JSON string, or language map).
- * @returns {{ lang: string, title: string }[]}
- */
-export function titleToTranslations(title) {
-  let map = null;
-  if (typeof title === "string") {
-    try {
-      const parsed = JSON.parse(title);
-      if (isLanguageMap(parsed)) map = parsed;
-    } catch {
-      return [];
-    }
-  } else if (isLanguageMap(title)) {
-    map = title;
-  }
-  if (!map) return [];
-  return Object.entries(map)
-    .filter(([lang, text]) => lang !== "en" && text !== undefined && text !== null)
-    .map(([lang, text]) => ({ lang, title: String(text) }));
+/** Primary language code of a language map (first key, else "en"). */
+export function languageMapPrimaryLang(map) {
+  if (!map) return "en";
+  const keys = Object.keys(map);
+  return keys.length > 0 ? keys[0] : "en";
+}
+
+/** Primary language text of a language map (first entry). */
+export function languageMapPrimary(map) {
+  return Object.values(map || {})[0] || "";
 }
 
 /**
- * Build the title value to submit: a plain string when there are no
- * translations, or a language map `{en: <primary>, <lang>: ...}` when
- * translations exist (the primary title is stored under "en").
+ * Parse a stored multilingual value into `{primaryLang, primary, translations}`.
  *
- * @param {string} primary — primary title text.
+ * The primary language is the FIRST key of the map (JSON insertion order
+ * is preserved) — default "en" when absent.  Legacy maps like
+ * `{"en": ..., "fr": ...}` still work (en stays primary).
+ *
+ * @param {*} value — stored value (string, JSON string, or language map).
+ * @returns {{ primaryLang: string, primary: string, translations: {lang: string, title: string}[] }}
+ */
+export function parseLanguageMap(value) {
+  let map = null;
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (isLanguageMap(parsed)) map = parsed;
+    } catch {
+      // Not JSON — plain string.
+    }
+  } else if (isLanguageMap(value)) {
+    map = value;
+  }
+  if (!map || Object.keys(map).length === 0) {
+    return { primaryLang: "en", primary: "", translations: [] };
+  }
+  const primaryLang = languageMapPrimaryLang(map);
+  const primary = String(languageMapPrimary(map) ?? "");
+  const translations = Object.entries(map)
+    .filter(([lang]) => lang !== primaryLang)
+    .filter(([, text]) => text !== undefined && text !== null)
+    .map(([lang, text]) => ({ lang, title: String(text) }));
+  return { primaryLang, primary, translations };
+}
+
+/**
+ * Extract the non-primary translations from a multilingual value.
+ *
+ * @param {*} value — stored value (string, JSON string, or language map).
+ * @returns {{ lang: string, title: string }[]}
+ */
+export function titleToTranslations(value) {
+  return valueToTranslations(value);
+}
+
+/**
+ * Extract the non-primary translations from a multilingual value.
+ *
+ * Generic version of `titleToTranslations` for any language-map field.
+ * The primary language (first key) is excluded.
+ *
+ * @param {*} value — stored value (string, JSON string, or language map).
+ * @returns {{ lang: string, title: string }[]}
+ */
+export function valueToTranslations(value) {
+  return parseLanguageMap(value).translations;
+}
+
+/**
+ * Build a field value to submit: a plain string when there are no
+ * translations, or a language map `{<primaryLang>: <primary>, <lang>: ...}`
+ * when translations exist (the primary text is stored under the first
+ * key — default "en", overridable per field).
+ *
+ * @param {string} primary — primary field text.
  * @param {{ lang: string, title: string }[]} translations
+ * @param {string} [primaryLang] — language code of the primary text
+ *   (default "en").
  * @returns {string|{en: string, [lang]: string}}
  */
-export function buildTitle(primary, translations = []) {
+export function buildTitle(primary, translations = [], primaryLang = "en") {
   const primaryText = String(primary || "").trim();
   const extras = (translations || [])
     .filter((t) => t && String(t.lang || "").trim() && String(t.title || "").trim())
@@ -221,9 +335,10 @@ export function buildTitle(primary, translations = []) {
     return primaryText;
   }
   const map = {};
-  if (primaryText) map.en = primaryText;
-  for (const { lang, title } of extras) {
-    map[lang] = title;
+  const lang = String(primaryLang || "en").trim() || "en";
+  if (primaryText) map[lang] = primaryText;
+  for (const { lang: extraLang, title } of extras) {
+    map[extraLang] = title;
   }
   return map;
 }

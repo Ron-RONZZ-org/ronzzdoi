@@ -5,9 +5,14 @@ import {
   linesToEntries,
   entriesToLines,
   fieldsToMetadata,
+  isTranslateableField,
   metadataToFormValues,
+  metadataToPrimaryLangs,
+  metadataToTranslations,
+  parseLanguageMap,
   titleToFormValue,
   titleToTranslations,
+  valueToTranslations,
   parseMetadata,
 } from "../doiForm.js";
 
@@ -83,6 +88,57 @@ describe("fieldsToMetadata", () => {
     const metadata = fieldsToMetadata(bookSchema, { title: "Only Title", isbn: "" });
     expect(metadata).toEqual({ title: "Only Title" });
   });
+
+  it("builds language maps for pure-text fields with translations (#47)", () => {
+    const metadata = fieldsToMetadata(
+      bookSchema,
+      { title: "The Great Book", publisher: "Prentice Hall" },
+      {
+        title: [{ lang: "fr", title: "Le Grand Livre" }],
+        publisher: [{ lang: "de", title: "Prentice Hall DE" }],
+      },
+    );
+    expect(metadata).toEqual({
+      title: { en: "The Great Book", fr: "Le Grand Livre" },
+      publisher: { en: "Prentice Hall", de: "Prentice Hall DE" },
+    });
+  });
+
+  it("keeps plain strings when translations are empty", () => {
+    const metadata = fieldsToMetadata(
+      bookSchema,
+      { title: "The Great Book", publisher: "Prentice Hall" },
+      {},
+    );
+    expect(metadata.title).toBe("The Great Book");
+  });
+
+  it("honours per-field primary languages (#47)", () => {
+    const metadata = fieldsToMetadata(
+      bookSchema,
+      { title: "Le Grand Livre", publisher: "Prentice Hall" },
+      { title: [{ lang: "en", title: "The Great Book" }] },
+      { title: "fr" },
+    );
+    expect(metadata.title).toEqual({ fr: "Le Grand Livre", en: "The Great Book" });
+  });
+});
+
+describe("isTranslateableField", () => {
+  it("accepts str-only fields", () => {
+    expect(isTranslateableField({ name: "title", types: ["str"] })).toBe(true);
+  });
+
+  it("rejects list and int fields", () => {
+    expect(isTranslateableField({ name: "authors", types: ["list"] })).toBe(false);
+    expect(isTranslateableField({ name: "year", types: ["int", "str"] })).toBe(false);
+    expect(isTranslateableField({ name: "year", types: ["str", "int"] })).toBe(false);
+  });
+
+  it("rejects missing types", () => {
+    expect(isTranslateableField({ name: "x" })).toBe(false);
+    expect(isTranslateableField(undefined)).toBe(false);
+  });
 });
 
 describe("metadataToFormValues", () => {
@@ -106,6 +162,77 @@ describe("metadataToFormValues", () => {
 
   it("returns empty object for missing metadata", () => {
     expect(metadataToFormValues(bookSchema, undefined)).toEqual({});
+  });
+});
+
+describe("metadataToTranslations", () => {
+  const filmSchema = [
+    { name: "title", types: ["str"] },
+    { name: "directors", types: ["list"] },
+    { name: "studio", types: ["str"] },
+  ];
+
+  it("extracts per-field translation rows from stored language maps (#47)", () => {
+    expect(metadataToTranslations(filmSchema, {
+      title: { en: "Inception", fr: "Inception (FR)" },
+      studio: "Warner Bros.",
+    })).toEqual({
+      title: [{ lang: "fr", title: "Inception (FR)" }],
+    });
+  });
+
+  it("returns empty for plain values", () => {
+    expect(metadataToTranslations(filmSchema, { title: "Inception" })).toEqual({});
+  });
+});
+
+describe("parseLanguageMap / primary language", () => {
+  it("treats the first key as primary (default en for legacy data)", () => {
+    expect(parseLanguageMap({ en: "Inception", fr: "Inception (FR)" })).toEqual({
+      primaryLang: "en",
+      primary: "Inception",
+      translations: [{ lang: "fr", title: "Inception (FR)" }],
+    });
+  });
+
+  it("supports non-en primary languages (fr-first maps)", () => {
+    expect(parseLanguageMap({ fr: "La Vie en Rose", en: "La Vie en Rose" })).toEqual({
+      primaryLang: "fr",
+      primary: "La Vie en Rose",
+      translations: [{ lang: "en", title: "La Vie en Rose" }],
+    });
+  });
+
+  it("handles JSON-string and plain-string values", () => {
+    expect(parseLanguageMap('{"fr": "Bonjour", "de": "Hallo"}')).toEqual({
+      primaryLang: "fr",
+      primary: "Bonjour",
+      translations: [{ lang: "de", title: "Hallo" }],
+    });
+    expect(parseLanguageMap("plain title")).toEqual({
+      primaryLang: "en",
+      primary: "",
+      translations: [],
+    });
+    expect(parseLanguageMap(undefined)).toEqual({
+      primaryLang: "en",
+      primary: "",
+      translations: [],
+    });
+  });
+});
+
+describe("metadataToPrimaryLangs", () => {
+  const filmSchema = [
+    { name: "title", types: ["str"] },
+    { name: "studio", types: ["str"] },
+  ];
+
+  it("extracts primary language per field", () => {
+    expect(metadataToPrimaryLangs(filmSchema, {
+      title: { fr: "La Vie en Rose", en: "La Vie en Rose" },
+      studio: "Warner Bros.",
+    })).toEqual({ title: "fr" });
   });
 });
 
@@ -140,6 +267,15 @@ describe("titleToTranslations", () => {
   it("returns empty for plain titles", () => {
     expect(titleToTranslations("Inception")).toEqual([]);
     expect(titleToTranslations(undefined)).toEqual([]);
+  });
+});
+
+describe("valueToTranslations", () => {
+  it("is the generic alias of titleToTranslations for any field (#47)", () => {
+    expect(valueToTranslations({ en: "WB", fr: "WB (FR)" })).toEqual([
+      { lang: "fr", title: "WB (FR)" },
+    ]);
+    expect(valueToTranslations("plain")).toEqual([]);
   });
 });
 

@@ -26,10 +26,11 @@ def _display_title(title: Any) -> str:
     """Render a title for the terminal.
 
     Multilingual titles are language maps (``{"en": "...", "fr": "..."}``);
-    display the primary language (``en``, falling back to the first entry).
+    display the primary language — the first key (default "en" for legacy
+    data, but any language can be primary).
     """
     if isinstance(title, dict):
-        return str(title.get("en") or next(iter(title.values()), ""))
+        return str(next(iter(title.values()), ""))
     return str(title) if title is not None else ""
 
 
@@ -61,6 +62,15 @@ def register_subparser(subparsers: argparse._SubParsersAction) -> None:
         help="DOI type (default: external)",
     )
     assign_parser.add_argument("--title", default="", help="Human-readable title")
+    assign_parser.add_argument(
+        "--metadata",
+        default="",
+        help=(
+            "Type-specific metadata as JSON, e.g. "
+            '\'{"title": {"en": "...", "fr": "..."}}\'. '
+            "String fields accept language maps for multilingual values."
+        ),
+    )
     assign_parser.set_defaults(func=_cmd_assign)
 
     # ── doi resolve ────────────────────────────────────────────────────────
@@ -140,6 +150,12 @@ def _cmd_assign(args: argparse.Namespace, client: RonzzdoiClient) -> None:
     }
     if args.url is not None:
         body["target_url"] = args.url
+    if args.metadata:
+        try:
+            body["metadata"] = json.loads(args.metadata)
+        except json.JSONDecodeError:
+            print("Error: --metadata must be valid JSON.")
+            sys.exit(1)
 
     result = client.post("/api/v1/doi", json=body)
 

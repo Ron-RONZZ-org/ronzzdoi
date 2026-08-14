@@ -112,6 +112,29 @@ class TestAssignRoute:
         assert body["title"] == "Hamlet"
         assert body["source_doi"] is None
 
+    def test_assign_multilingual_title(self, client, admin_api_key_edit):
+        """A language-map title round-trips through the API (#47)."""
+        resp = client.post(
+            "/api/v1/snippet",
+            json={
+                "content_kind": "text",
+                "content": "To be or not to be.",
+                "title": {"en": "Hamlet", "fr": "Hamlet (FR)"},
+            },
+            headers=_auth_headers(admin_api_key_edit),
+        )
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        assert body["title"] == {"en": "Hamlet", "fr": "Hamlet (FR)"}
+
+        # Resolve returns the same language map.
+        resolved = client.get(
+            f"/api/v1/snippet/{body['doi']}",
+            headers=_auth_headers(admin_api_key_edit),
+        )
+        assert resolved.status_code == 200, resolved.text
+        assert resolved.json()["title"] == {"en": "Hamlet", "fr": "Hamlet (FR)"}
+
     def test_assign_requires_edit_permission(self, client, admin_api_key_readonly):
         resp = client.post(
             "/api/v1/snippet",

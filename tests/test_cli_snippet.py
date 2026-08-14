@@ -197,6 +197,31 @@ class TestAdd:
         out = capsys.readouterr().out
         assert "Snippet added: 10.ronzz/abc123def456" in out
 
+    def test_assign_multilingual_title(self, capsys: pytest.CaptureFixture) -> None:
+        """add sends a language-map title through (#47)."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            import json
+
+            body = json.loads(request.content)
+            assert body["title"] == {"en": "Hamlet", "fr": "Hamlet (FR)"}
+            return httpx.Response(
+                201, json={**SNIPPET_RESPONSE, "title": body["title"]}
+            )
+
+        args = _make_args(
+            content_kind="text",
+            content="To be or not to be",
+            title={"en": "Hamlet", "fr": "Hamlet (FR)"},
+            language="",
+            source_doi="",
+            page_start="",
+            page_end="",
+        )
+        _cmd_add(args, _mock_client(handler))
+        out = capsys.readouterr().out
+        assert "Snippet added" in out
+
 
 # ── view ───────────────────────────────────────────────────────────────────
 

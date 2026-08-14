@@ -354,6 +354,41 @@ class TestAPA:
         assert "Film" in result
         assert "Big Studio" in result
 
+    def test_multilingual_metadata_title_uses_primary(
+        self, formatter, doi_svc, person_doi
+    ):
+        """Language maps in metadata render the primary language (#47)."""
+        doi = doi_svc.assign(
+            doi_type="film",
+            title="Test Film",
+            metadata={
+                "title": {"en": "Inception", "fr": "Inception (FR)"},
+                "directors": [{"person_doi": person_doi}],
+                "year": 2010,
+                "studio": {"en": "Warner Bros.", "fr": "Warner Bros. (FR)"},
+            },
+        )["doi"]
+        result = formatter.format(doi, style="apa")
+        assert "Inception" in result
+        assert "Inception (FR)" not in result
+        assert "Warner Bros." in result
+        assert "Warner Bros. (FR)" not in result
+
+    def test_non_en_primary_language(self, formatter, doi_svc, person_doi):
+        """A map with a non-en first key renders that language (#47)."""
+        doi = doi_svc.assign(
+            doi_type="film",
+            title="Test Film",
+            metadata={
+                "title": {"fr": "La Vie en Rose", "en": "La Vie en Rose"},
+                "directors": [{"person_doi": person_doi}],
+                "year": 1946,
+                "studio": "Pathé",
+            },
+        )["doi"]
+        result = formatter.format(doi, style="apa")
+        assert "La Vie en Rose" in result
+
     def test_two_authors(self, formatter, doi_svc, person_doi, author_doi):
         """APA with two authors uses &."""
         doi = doi_svc.assign(

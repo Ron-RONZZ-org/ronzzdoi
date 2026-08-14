@@ -34,11 +34,16 @@ from ronzzdoi.doi.exceptions import (
 )
 
 
-def _serialize_title(title: str | dict[str, str]) -> str:
+def serialize_title(title: str | dict[str, str]) -> str:
     """Store a title as text: language maps become JSON strings."""
     if isinstance(title, dict):
         return json.dumps(title, ensure_ascii=False)
     return title
+
+
+def _serialize_title(title: str | dict[str, str]) -> str:
+    """Backward-compatible alias for :func:`serialize_title`."""
+    return serialize_title(title)
 
 
 def _parse_json_object(value: str) -> dict[str, Any] | None:

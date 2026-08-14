@@ -31,7 +31,13 @@ class SnippetAssignRequest(BaseModel):
         min_length=1,
         description="The snippet content (quotation text, code, or KaTeX source)",
     )
-    title: str = Field(default="", description="Human-readable title for the snippet")
+    title: str | dict[str, str] = Field(
+        default="",
+        description=(
+            "Human-readable title. Either a plain string or a language map "
+            "(e.g. {'en': '…', 'fr': '…'}) for multilingual titles."
+        ),
+    )
     language: str = Field(
         default="",
         description="Code language hint (code snippets only). Ignored for text/math.",
@@ -55,7 +61,7 @@ class SnippetModifyRequest(BaseModel):
 
     content_kind: ContentKind | None = None
     content: str | None = Field(default=None, min_length=1)
-    title: str | None = None
+    title: str | dict[str, str] | None = None
     language: str | None = None
     source_doi: str | None = Field(
         default=None,
@@ -69,7 +75,7 @@ class SnippetResponse(BaseModel):
     """Response model representing a snippet record."""
 
     doi: str
-    title: str = ""
+    title: str | dict[str, str] = ""
     content_kind: str = "text"
     content: str = ""
     language: str = ""

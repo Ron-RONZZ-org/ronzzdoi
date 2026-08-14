@@ -25,7 +25,7 @@ from ronzzdoi.cli.doi import (
 
 def _make_args(**overrides: Any) -> Any:
     """Create a simple namespace for testing command handlers."""
-    defaults = {"json_output": False}
+    defaults = {"json_output": False, "metadata": ""}
     defaults.update(overrides)
     return type("Args", (), defaults)()
 
@@ -125,6 +125,54 @@ def test_assign_json(capsys: pytest.CaptureFixture) -> None:
     assert data["doi"] == "10.ronzz/uuid"
 
 
+def test_assign_metadata_flag(capsys: pytest.CaptureFixture) -> None:
+    """doi assign --metadata sends parsed JSON with language maps (#47)."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert body["metadata"] == {
+            "title": {"en": "Inception", "fr": "Inception FR"},
+            "year": 2010,
+        }
+        return httpx.Response(
+            201,
+            json={
+                "doi": "10.ronzz/film-uuid",
+                "target_url": None,
+                "doi_type": "film",
+                "title": "Inception",
+                "metadata": body["metadata"],
+            },
+        )
+
+    client = _mock_client(handler)
+    args = _make_args(
+        url=None,
+        doi_type="film",
+        title="Inception",
+        metadata='{"title": {"en": "Inception", "fr": "Inception FR"}, "year": 2010}',
+    )
+    _cmd_assign(args, client)
+    captured = capsys.readouterr()
+    assert "film-uuid" in captured.out
+
+
+def test_assign_metadata_invalid_json(capsys: pytest.CaptureFixture) -> None:
+    """doi assign --metadata with invalid JSON exits with an error."""
+
+    client = _mock_client(lambda request: httpx.Response(500, json={}))
+    args = _make_args(
+        url=None,
+        doi_type="film",
+        title="Inception",
+        metadata="{not json",
+    )
+    with pytest.raises(SystemExit):
+        _cmd_assign(args, client)
+    captured = capsys.readouterr()
+    assert "--metadata must be valid JSON" in captured.out
+
+
 # ── resolve ────────────────────────────────────────────────────────────────
 
 
@@ -154,6 +202,33 @@ def test_resolve(capsys: pytest.CaptureFixture) -> None:
     assert "10.ronzz/abc123" in captured.out
     assert "https://example.com" in captured.out
     assert "active" in captured.out
+
+
+def test_resolve_multilingual_title_displays_primary(
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """A language-map title prints the primary language (#47)."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "doi": "10.ronzz/fr-song",
+                "target_url": None,
+                "title": {"fr": "La Vie en Rose", "en": "La Vie en Rose"},
+                "doi_type": "song",
+                "status": "active",
+                "created_at": "2026-01-01T00:00:00+00:00",
+                "updated_at": "2026-01-01T00:00:00+00:00",
+                "redirect_history": [],
+            },
+        )
+
+    client = _mock_client(handler)
+    args = _make_args(doi="10.ronzz/fr-song")
+    _cmd_resolve(args, client)
+    captured = capsys.readouterr()
+    assert "La Vie en Rose" in captured.out
 
 
 def test_resolve_with_redirect_history(capsys: pytest.CaptureFixture) -> None:

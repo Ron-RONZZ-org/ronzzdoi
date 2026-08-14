@@ -113,6 +113,13 @@ prints just the embed URL for JS-based embeds.
 - `code` → language field
 - `text` → source DOI + page start/end fields
 
+The **title** field supports multilingual titles like DOI titles: an
+"Add translations" button opens per-language rows, and the stored title
+is a language map (`{"en": "...", "fr": "..."}` — JSON text in the
+`dois.title` column, deserialized to a dict in API responses).  The
+primary language (map's first key) is user-settable and defaults to
+`en`.
+
 `!snippet search [query]` opens the **snippet list tab**
 (`snippet-list` type, rendered by `DoiListTab` in snippet mode): rows
 carry a content-kind badge, support selection + batch tombstone, and

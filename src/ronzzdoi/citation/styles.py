@@ -16,12 +16,43 @@ DOI_RESOLVER = Callable[[str], dict[str, Any] | None]
 """Signature for resolving a DOI to its record (with deserialized metadata)."""
 
 
+# ── Language-map helpers ───────────────────────────────────────────────────
+
+
+def _primary_text(value: Any) -> str:
+    """Render a metadata value for display.
+
+    Multilingual values are language maps (``{"en": "...", "fr": "..."}``
+    stored inside ``metadata_json``); display the primary language — the
+    FIRST key of the map (default "en" for legacy data, but any language
+    can be primary).  Plain values pass through.
+    """
+    if isinstance(value, dict):
+        first = next(iter(value.values()), "")
+        return str(first or "")
+    if value is None:
+        return ""
+    return str(value)
+
+
+def _flatten_language_maps(meta: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of *meta* with top-level language maps → primary text.
+
+    Top-level dict values in metadata are language maps (list fields are
+    arrays and pass through untouched).
+    """
+    return {
+        key: _primary_text(val) if isinstance(val, dict) else val
+        for key, val in meta.items()
+    }
+
+
 # ── Name helpers ────────────────────────────────────────────────────────────
 
 
 def _format_person_name_apa(person: dict[str, Any]) -> str:
     """Format a person DOI's metadata as ``Last, F.`` (APA style)."""
-    meta = person.get("metadata", {})
+    meta = _flatten_language_maps(person.get("metadata", {}))
     last = meta.get("last_name", "Unknown")
     first = meta.get("first_name", "")
     initial = f"{first[0]}." if first else ""
@@ -30,7 +61,7 @@ def _format_person_name_apa(person: dict[str, Any]) -> str:
 
 def _format_person_name_vancouver(person: dict[str, Any]) -> str:
     """Format a person DOI's metadata as ``Last F`` (Vancouver style)."""
-    meta = person.get("metadata", {})
+    meta = _flatten_language_maps(person.get("metadata", {}))
     last = meta.get("last_name", "Unknown")
     first = meta.get("first_name", "")
     initial = first[0] if first else ""
@@ -86,7 +117,9 @@ def _resolve_issuing_authority(
     if record.get("doi_type") == "person":
         return _format_person_name_apa(record)
     # abstract_entity or fallback
-    return record.get("metadata", {}).get("legal_name", "[unknown entity]")
+    return _flatten_language_maps(record.get("metadata", {})).get(
+        "legal_name", "[unknown entity]"
+    )
 
 
 # ── APA style ───────────────────────────────────────────────────────────────
@@ -103,7 +136,7 @@ def format_apa(record: dict[str, Any], *, resolve: DOI_RESOLVER) -> str:
         APA-formatted citation string.
     """
     doi_type = record.get("doi_type", "external")
-    meta = record.get("metadata", {})
+    meta = _flatten_language_maps(record.get("metadata", {}))
     _resolve = resolve  # local alias for closures
 
     # ── Entity DOIs are not directly citable ─────────────────────────
@@ -319,7 +352,9 @@ def _resolve_book_title(book_doi: str, resolve: DOI_RESOLVER) -> str:
     book = resolve(book_doi)
     if not book:
         return "Unknown Book"
-    return book.get("metadata", {}).get("title", "Untitled Book")
+    return _flatten_language_maps(book.get("metadata", {})).get(
+        "title", "Untitled Book"
+    )
 
 
 # ── Vancouver style ─────────────────────────────────────────────────────────
@@ -336,7 +371,7 @@ def format_vancouver(record: dict[str, Any], *, resolve: DOI_RESOLVER) -> str:
         Vancouver-formatted citation string.
     """
     doi_type = record.get("doi_type", "external")
-    meta = record.get("metadata", {})
+    meta = _flatten_language_maps(record.get("metadata", {}))
     _resolve = resolve
 
     if doi_type in ("person", "abstract_entity", "country"):
