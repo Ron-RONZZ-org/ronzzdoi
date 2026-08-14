@@ -109,7 +109,10 @@ jobs:
           API_KEY=$(grep -oP 'Admin API key:\s+\K\S+' /tmp/backend.log | head -1)
           echo "Admin key: ${API_KEY:0:12}..."
           cd web
-          setsid npm run dev > /tmp/frontend.log 2>&1 &
+          # Bind Vite to 127.0.0.1 (IPv4): the default localhost bind may
+          # resolve to ::1 on the runner, while the E2E test targets
+          # http://127.0.0.1:6025 and Chromium would get ERR_CONNECTION_REFUSED.
+          setsid npm run dev -- --host 127.0.0.1 > /tmp/frontend.log 2>&1 &
           FRONTEND_PID=$!
           for i in $(seq 1 30); do
             curl -sf -o /dev/null http://127.0.0.1:6025/ && break
