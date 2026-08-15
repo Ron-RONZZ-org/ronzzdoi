@@ -282,8 +282,8 @@ PYTHONPATH=src /path/to/main/checkout/.venv/bin/python -m pytest tests/...
 
 | Suite | Count | File |
 |-------|-------|------|
-| Backend pytest | 448 | All `tests/test_*.py` |
-| Frontend vitest | 62 | `web/src/lib/__tests__/*.test.js` |
+| Backend pytest | 490 | All `tests/test_*.py` |
+| Frontend vitest | 85 | `web/src/lib/__tests__/*.test.js` |
 | E2E Playwright | 1 suite | `web/e2e_gui_smoke.mjs` |
 
 ### E2E GUI smoke test invocation

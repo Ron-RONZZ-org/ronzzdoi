@@ -94,7 +94,9 @@ def register_subparser(subparsers: argparse._SubParsersAction) -> None:
     add_parser.add_argument(
         "--content",
         required=True,
-        help="The snippet content (quotation text, code, or KaTeX source)",
+        help="The snippet content (quotation text, code, or KaTeX source). "
+        "$$/$ stripped for math, ```/` fences for code; text is stored "
+        "verbatim as markdown/HTML and rendered at display time",
     )
     add_parser.add_argument("--title", default="", help="Human-readable title")
     add_parser.add_argument(

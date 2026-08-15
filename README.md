@@ -202,7 +202,10 @@ cd web && RONZZDOI_PORT=8011 npm run dev
 For **read-only** search, browsing, and citation formatting, visit
 **[https://doi.ronzz.org](https://doi.ronzz.org)** — no API key required.
 Snippet embeds live at `https://doi.ronzz.org/embed/10.ronzz/<suffix>` and
-are frameable by any ronzz site.
+are frameable by any ronzz site. Snippet content is stored as written
+(`$$`/`$` stripped for KaTeX math, ``` fences/backticks for code) and
+text quotations are stored as raw markdown/HTML, rendered to rich HTML at
+display time — re-editing shows exactly what you pasted.
 
 ### Canonical DOI URLs
 

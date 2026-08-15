@@ -9,12 +9,14 @@ Public API::
 
     from ronzzdoi.snippet import SnippetService
     from ronzzdoi.snippet.constants import CONTENT_KINDS
+    from ronzzdoi.snippet.content import normalize_content
     from ronzzdoi.snippet.schema import SnippetAssignRequest
 """
 
 from __future__ import annotations
 
 from ronzzdoi.snippet.constants import CONTENT_KINDS, SUGGESTED_LANGUAGES
+from ronzzdoi.snippet.content import normalize_content
 from ronzzdoi.snippet.exceptions import (
     SnippetError,
     SnippetInvalidError,
@@ -39,4 +41,5 @@ __all__ = [
     "SnippetResponse",
     "SnippetService",
     "SnippetSourceNotFoundError",
+    "normalize_content",
 ]

@@ -14,6 +14,7 @@
   import ConfirmDialog from "@lightercore/ui/ConfirmDialog.svelte";
   import { buildEmbedHtml, embedUrlFor } from "./embed.js";
   import { titleToFormValue } from "./doiForm.js";
+  import { renderSnippetHtml } from "./snippetRender.js";
 
   let { data = {}, tabId } = $props();
 
@@ -28,6 +29,9 @@
   const pageEnd = $derived(data.page_end || "");
   const status = $derived(data.status || "active");
   const isTombstone = $derived(status === "tombstone");
+  // Text snippets store raw markdown/HTML — render to sanitized HTML for
+  // display; the edit form always shows the raw stored content.
+  const quoteHtml = $derived(renderSnippetHtml(data));
 
   const embedUrl = $derived(embedUrlFor(doi));
   const iframeHtml = $derived(buildEmbedHtml(doi, title));
@@ -125,7 +129,7 @@
     {:else if contentKind === "math"}
       <pre class="math-block">{content}</pre>
     {:else}
-      <blockquote class="quote-block">{content}</blockquote>
+      <div class="quote-html">{@html quoteHtml}</div>
       {#if sourceDoi}
         <div class="snippet-meta">
           Source: <a href={`https://doi.ronzz.org/doi/${sourceDoi.replace(/^10\.ronzz\//, "")}`} target="_blank" rel="noopener noreferrer">{sourceDoi}</a>
@@ -211,16 +215,49 @@
     padding: 0.75rem 1rem;
     overflow-x: auto;
   }
-  .quote-block {
+  .quote-html {
     margin: 0;
     padding-left: 0.75rem;
     border-left: 3px solid #4a6a8a;
     color: #d8d8e8;
     font-size: 0.95rem;
     line-height: 1.6;
-    font-style: italic;
-    white-space: pre-wrap;
     word-break: break-word;
+  }
+  .quote-html > :first-child { margin-top: 0; }
+  .quote-html > :last-child { margin-bottom: 0; }
+  .quote-html p { margin: 0.5rem 0; }
+  .quote-html blockquote {
+    margin: 0.5rem 0;
+    padding-left: 0.75rem;
+    border-left: 2px solid #4a6a8a;
+    font-style: italic;
+  }
+  .quote-html a { color: #7fb0e0; text-decoration: none; }
+  .quote-html a:hover { text-decoration: underline; }
+  .quote-html code {
+    background: #1a1f38;
+    border: 1px solid #2a2a44;
+    border-radius: 3px;
+    padding: 0.05rem 0.3rem;
+    font-family: monospace;
+    font-size: 0.85em;
+  }
+  .quote-html pre {
+    background: #1a1f38;
+    border: 1px solid #2a2a44;
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+    overflow-x: auto;
+    font-family: monospace;
+    font-size: 0.85em;
+  }
+  .quote-html pre code { background: none; border: none; padding: 0; }
+  .quote-html ul, .quote-html ol { margin: 0.5rem 0; padding-left: 1.5rem; }
+  .quote-html li { margin: 0.2rem 0; }
+  .quote-html h1, .quote-html h2, .quote-html h3, .quote-html h4 {
+    margin: 0.75rem 0 0.4rem;
+    color: #e8e8f2;
   }
   .code-block, .math-block {
     margin: 0;

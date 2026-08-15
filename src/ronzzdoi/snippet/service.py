@@ -26,6 +26,7 @@ from lightercore.db import LighterDB
 from ronzzdoi.doi.exceptions import DOINotFoundError
 from ronzzdoi.doi.service import DOIService, serialize_title
 from ronzzdoi.snippet.constants import normalize_content_kind
+from ronzzdoi.snippet.content import normalize_content
 from ronzzdoi.snippet.exceptions import (
     SnippetInvalidError,
     SnippetNotFoundError,
@@ -71,7 +72,11 @@ class SnippetService:
 
         Args:
             content_kind: ``"text"``, ``"code"``, or ``"math"``.
-            content: The snippet content.  Must be non-empty.
+            content: The snippet content.  Must be non-empty.  Transport
+                markup is stripped automatically (``$$``/``$`` for math,
+                ``` fences/backticks for code); ``text`` content is
+                stored verbatim as markdown/HTML and rendered at display
+                time — see :mod:`ronzzdoi.snippet.content`.
             title: Human-readable title.
             language: Code language hint (code snippets only).
             source_doi: Optional source DOI (must exist and be active).
@@ -83,7 +88,7 @@ class SnippetService:
 
         Raises:
             SnippetInvalidError: If *content_kind* is invalid or *content*
-                is empty.
+                is empty (including after markup stripping).
             SnippetSourceNotFoundError: If *source_doi* does not exist or
                 is tombstoned.
         """
@@ -91,6 +96,8 @@ class SnippetService:
             kind = normalize_content_kind(content_kind)
         except ValueError as exc:
             raise SnippetInvalidError(str(exc)) from exc
+
+        content = normalize_content(kind, content)
 
         if not content or not content.strip():
             raise SnippetInvalidError("content must be non-empty.")
@@ -167,7 +174,8 @@ class SnippetService:
 
         Args:
             doi: Full DOI or prefix of the snippet to modify.
-            content: New content.
+            content: New content (transport markup stripped as in
+                :meth:`assign`; ``text`` content is stored verbatim).
             content_kind: New content kind (``text``/``code``/``math``).
             title: New title (written to the ``dois`` row).
             language: New language hint.
@@ -195,9 +203,17 @@ class SnippetService:
 
         updates: dict[str, Any] = {}
         if content is not None:
-            if not content.strip():
+            # Normalize against the effective kind: the provided kind if
+            # given, otherwise the snippet's current kind.
+            try:
+                normalized = normalize_content(
+                    content_kind or snippet["content_kind"], content
+                )
+            except ValueError as exc:
+                raise SnippetInvalidError(str(exc)) from exc
+            if not normalized.strip():
                 raise SnippetInvalidError("content must be non-empty.")
-            updates["content"] = content
+            updates["content"] = normalized
         if content_kind is not None:
             try:
                 updates["content_kind"] = normalize_content_kind(content_kind)

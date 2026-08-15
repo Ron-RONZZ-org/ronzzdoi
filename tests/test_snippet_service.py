@@ -155,6 +155,59 @@ class TestAssign:
         assert r1["doi"] != r2["doi"]
 
 
+# ── Content normalization (transport-markup stripping) ────────────────────
+
+
+class TestContentNormalization:
+    def test_assign_math_strips_delimiters(self, svc):
+        """$$…$$ wrappers are stripped before storage."""
+        result = svc.assign("math", "$$E = mc^2$$")
+        assert result["content"] == "E = mc^2"
+
+    def test_assign_code_strips_fences(self, svc):
+        """``` fences (with language hint) are stripped before storage."""
+        result = svc.assign("code", "```python\nprint('hi')\n```")
+        assert result["content"] == "print('hi')"
+
+    def test_assign_text_stored_verbatim(self, svc):
+        """Text is markdown/HTML source — stored raw, rendered at display time."""
+        markdown = "**To be** or *not* to be — see [the book](https://x)"
+        result = svc.assign("text", markdown)
+        assert result["content"] == markdown
+
+    def test_assign_text_html_stored_verbatim(self, svc):
+        result = svc.assign("text", "<p>A <b>wise</b> quote</p>")
+        assert result["content"] == "<p>A <b>wise</b> quote</p>"
+
+    def test_assign_delimiters_only_raises(self, svc):
+        """Content that normalizes to empty is rejected."""
+        with pytest.raises(SnippetInvalidError, match="non-empty"):
+            svc.assign("math", "$$$$")
+        with pytest.raises(SnippetInvalidError, match="non-empty"):
+            svc.assign("code", "```\n```")
+
+    def test_modify_content_strips_against_current_kind(self, svc):
+        """Modify without a kind strips using the snippet's stored kind."""
+        result = svc.assign("code", "print('hi')")
+        updated = svc.modify(result["doi"], content="```python\nprint('bye')\n```")
+        assert updated["content"] == "print('bye')"
+        assert updated["content_kind"] == "code"
+
+    def test_modify_text_content_stored_verbatim(self, svc):
+        result = svc.assign("text", "plain quote")
+        updated = svc.modify(result["doi"], content="## A heading\nwith **bold**")
+        assert updated["content"] == "## A heading\nwith **bold**"
+
+    def test_modify_content_and_kind_together(self, svc):
+        """A kind change re-normalizes the content against the new kind."""
+        result = svc.assign("text", "plain quote")
+        updated = svc.modify(
+            result["doi"], content="$$\\int_0^1 x\\,dx$$", content_kind="math"
+        )
+        assert updated["content"] == r"\int_0^1 x\,dx"
+        assert updated["content_kind"] == "math"
+
+
 # ── resolve() ───────────────────────────────────────────────────────────────
 
 

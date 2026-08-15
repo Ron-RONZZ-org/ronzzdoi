@@ -113,6 +113,11 @@ def snippet_add(
         !snippet add  (opens the interactive form with a Text/Code/Math toggle)
 
     Missing ``--type`` or ``--content`` → returns ``form`` response.
+
+    Content is normalized on save: ``$$``/``$`` are stripped for math and
+    ``` / `` ` `` for code.  Text content is stored verbatim as
+    markdown/HTML and rendered to rich HTML at display time (see
+    :mod:`ronzzdoi.snippet.content`).
     """
     perm = check_permission(user, "edit")
     if perm:

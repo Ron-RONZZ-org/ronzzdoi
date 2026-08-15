@@ -19,6 +19,7 @@ rejects `doi_type='snippet'` records.
 src/ronzzdoi/snippet/
 ├── __init__.py         # Public API exports
 ├── constants.py        # CONTENT_KINDS (text/code/math), SUGGESTED_LANGUAGES
+├── content.py          # Content normalization (transport-markup stripping)
 ├── exceptions.py       # SnippetError hierarchy
 ├── schema.py           # SnippetAssignRequest, SnippetModifyRequest, SnippetResponse
 └── service.py          # SnippetService — two-table lifecycle management
@@ -34,6 +35,34 @@ src/ronzzdoi/snippet/
 
 `content_kind` is validated by a DB CHECK constraint
 (`content_kind IN ('text','code','math')`) and by `normalize_content_kind()`.
+
+## Content Storage Model
+
+Snippet content is stored **as the user wrote it**, with one exception:
+
+| Kind | Stored | Rationale |
+|------|--------|-----------|
+| `text` | **verbatim** markdown/HTML | The quotation source; re-editing must show what the user pasted |
+| `math` | bare LaTeX (`$$…$$` / `$…$` stripped by `normalize_content()`) | KaTeX `renderToString` rejects `$` delimiters |
+| `code` | bare code (``` fences / `` ` `` stripped) | The editor shows code, not transport wrappers |
+
+`SnippetService.assign()` / `.modify()` apply the stripping via
+`normalize_content()` (`snippet/content.py`).  Content that normalizes to
+empty (e.g. `$$$$` or an empty fence) is rejected with
+`SnippetInvalidError`.  The normalization applies to **every** entry
+point — `!snippet add`, `!snippet modify`, the CLI, the GUI forms, and
+the API routes — because they all funnel through the service layer.
+
+**Text is rendered to rich HTML at display time, never at write time:**
+- Admin GUI: `web/src/lib/snippetRender.js` — `marked` → DOMPurify
+  (client-side, `SnippetTab.svelte`).
+- Public embeds: `ronzzdoi-public-web` `src/lib/snippetEmbed.ts` —
+  `marked` → `sanitize-html` (server-side; no images/scripts → CSP
+  `default-src 'none'` stays).
+
+Both renderers share the same HTML tag/attribute allowlist (text-formatting
+only) so the admin preview and the public embed match.  The edit form and
+the CLI show the raw stored content.
 
 ## SnippetService API
 
@@ -146,10 +175,12 @@ get autocomplete automatically from the registered `@command` decorators.
 
 ## Tests
 
-- `tests/test_snippet_service.py` — service lifecycle + unified search
+- `tests/test_snippet_content.py` — content normalization (math delimiters, code fences, text stored verbatim)
+- `tests/test_snippet_service.py` — service lifecycle + unified search + normalization through assign/modify
 - `tests/test_snippet_routes.py` — HTTP routes, permissions, public endpoint
 - `tests/test_cli_snippet.py` — CLI embed/assign/resolve (MockTransport)
 - `tests/test_db.py::TestSchema` — snippets table/triggers/indexes + CHECK
+- `web/src/lib/__tests__/snippetRender.test.js` — admin GUI markdown→sanitized-HTML rendering
 - `web/e2e_gui_smoke.mjs` — GUI toggle, snippet tab, Copy Embed clipboard
 
 Run: `./scripts/test.sh tests/test_snippet_service.py tests/test_snippet_routes.py tests/test_cli_snippet.py -v`
@@ -165,7 +196,9 @@ fragments:
   (`/embed/10.ronzz/<suffix>`), standalone (no site chrome, no scripts),
   with `?theme=dark`, `?cite=0`, `?title=` options
 - `src/lib/snippetEmbed.ts` — shared server-side rendering:
-  - text → HTML-escaped `blockquote` (XSS-safe by construction)
+  - text → markdown rendered (`marked`) then sanitized (`sanitize-html`,
+    snippet allowlist — no scripts, images, event handlers, javascript:
+    URLs), wrapped in a `blockquote` (XSS-safe by construction)
   - code → shiki syntax highlighting (server-side, escaped)
   - math → KaTeX `renderToString`, falling back to escaped source on error
 - Headers: `Cross-Origin-Resource-Policy: cross-origin`,
